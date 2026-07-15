@@ -1,0 +1,8 @@
+{
+  "expo": {
+    "name": "Bedtime Story Tracker",
+    "slug": "bedtime-story-tracker",
+    "version": "1.0.0",
+    "platforms": ["web"]
+  }
+}
