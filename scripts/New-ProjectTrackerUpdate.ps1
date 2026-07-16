@@ -1,173 +1,165 @@
 #requires -Version 7.0
 <#
 .SYNOPSIS
-Generates a copy/paste-ready ChatGPT Project tracker update from a local Git repository.
+Creates a copy/paste-ready ChatGPT Project tracker update from a local Git repository.
 
 .DESCRIPTION
-Collects verified repository facts and optional manual verification notes, runs selected
-validation commands, and produces a Markdown prompt for the ChatGPT Project control chat.
+Collects repository facts, optionally runs validation commands, accepts manual
+checkpoint notes, and generates a Markdown prompt for the ChatGPT Project control chat.
 
-The script is intentionally read-only with respect to the repository. It does not:
-- Stage files
-- Create commits
-- Push changes
-- Install dependencies
-- Modify application or Git configuration files
-
-By default, the generated prompt is written to the console. It can also be copied to the
-clipboard and/or saved to a file.
+This script is read-only with respect to the repository. It does not stage, commit,
+push, install dependencies, or modify application files.
 
 .PARAMETER RepositoryPath
 Path to the local Git repository.
 
 .PARAMETER Checkpoint
-Human-readable name of the completed checkpoint.
+Human-readable completed checkpoint.
 
 .PARAMETER NextCheckpoint
-The next bounded checkpoint to request from the Project tracker.
+Next bounded checkpoint to request.
 
 .PARAMETER ValidationCommand
-One or more commands to run from the repository root. Defaults to:
-- npx tsc --noEmit
-- git diff --check
+Validation commands to run from the repository root.
 
 .PARAMETER BrowserVerification
-Manual browser verification notes supplied by the user.
+Manual browser verification supplied by the user.
 
 .PARAMETER KnownIssues
 Known issues or unresolved risks.
 
 .PARAMETER PushStatus
-Push status, such as Succeeded, Not pushed yet, or Failed.
+Push state, such as Succeeded, Not pushed yet, or Failed.
 
 .PARAMETER Interactive
-Prompts for missing or confirmable values.
+Prompts for checkpoint values.
 
 .PARAMETER CopyToClipboard
-Copies the generated prompt to the Windows clipboard.
+Copies the generated prompt to the clipboard.
 
 .PARAMETER OutputPath
-Optional file path for saving the generated Markdown prompt.
+Optional path for saving the generated prompt.
 
 .PARAMETER SkipValidation
 Skips validation command execution.
 
 .PARAMETER RecentCommitCount
-Number of recent commits to include. Defaults to 5.
+Number of recent commits to include.
 
 .PARAMETER FailOnValidationError
-Returns exit code 1 when one or more validation commands fail.
+Returns exit code 1 if any validation command fails.
+
+.EXAMPLE
+.\scripts\New-ProjectTrackerUpdate.ps1 -Interactive -CopyToClipboard
 
 .EXAMPLE
 .\scripts\New-ProjectTrackerUpdate.ps1 `
-  -Interactive `
-  -CopyToClipboard
-
-.EXAMPLE
-.\scripts\New-ProjectTrackerUpdate.ps1 `
-  -Checkpoint "Added story reading timer" `
-  -BrowserVerification "Timer started, updated, stopped, and refresh worked" `
-  -PushStatus "Succeeded" `
-  -NextCheckpoint "Add post-reading calmness and notes" `
-  -CopyToClipboard
-
-.EXAMPLE
-.\scripts\New-ProjectTrackerUpdate.ps1 `
-  -Checkpoint "Tooling-only update" `
-  -SkipValidation `
-  -OutputPath ".\artifacts\project-tracker-update.md"
+    -Checkpoint 'Added story timer' `
+    -BrowserVerification 'Timer started, stopped, and refreshed successfully.' `
+    -KnownIssues 'None currently reported' `
+    -PushStatus 'Succeeded' `
+    -NextCheckpoint 'Add post-reading check-in' `
+    -RecentCommitCount 8 `
+    -CopyToClipboard
 #>
 
 [CmdletBinding()]
 param(
     [Parameter()]
     [ValidateNotNullOrEmpty()]
-    [string]$RepositoryPath = "C:\repo\bedtime-story-tracker",
+    [string] $RepositoryPath = 'C:\repo\bedtime-story-tracker',
 
     [Parameter()]
-    [string]$Checkpoint,
+    [AllowEmptyString()]
+    [string] $Checkpoint = '',
 
     [Parameter()]
-    [string]$NextCheckpoint,
+    [AllowEmptyString()]
+    [string] $NextCheckpoint = '',
 
     [Parameter()]
     [ValidateNotNull()]
-    [string[]]$ValidationCommand = @(
-        "npx tsc --noEmit",
-        "git diff --check"
+    [string[]] $ValidationCommand = @(
+        'npx tsc --noEmit',
+        'git diff --check'
     ),
 
     [Parameter()]
-    [string]$BrowserVerification = "Not provided",
+    [AllowEmptyString()]
+    [string] $BrowserVerification = 'Not provided',
 
     [Parameter()]
-    [string]$KnownIssues = "None reported",
+    [AllowEmptyString()]
+    [string] $KnownIssues = 'None currently reported',
 
     [Parameter()]
-    [string]$PushStatus = "Not provided",
+    [AllowEmptyString()]
+    [string] $PushStatus = 'Succeeded',
 
     [Parameter()]
-    [switch]$Interactive,
+    [switch] $Interactive,
 
     [Parameter()]
-    [switch]$CopyToClipboard,
+    [switch] $CopyToClipboard,
 
     [Parameter()]
-    [string]$OutputPath,
+    [AllowEmptyString()]
+    [string] $OutputPath = '',
 
     [Parameter()]
-    [switch]$SkipValidation,
+    [switch] $SkipValidation,
 
     [Parameter()]
     [ValidateRange(1, 25)]
-    [int]$RecentCommitCount = 5,
+    [int] $RecentCommitCount = 5,
 
     [Parameter()]
-    [switch]$FailOnValidationError
+    [switch] $FailOnValidationError
 )
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 
-function Read-InteractiveValue {
+function Read-TrackerValue {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [string]$Prompt,
+        [string] $Label,
 
         [Parameter()]
         [AllowEmptyString()]
-        [string]$DefaultValue = ""
+        [string] $Default = ''
     )
 
-    $suffix = if ([string]::IsNullOrWhiteSpace($DefaultValue)) {
-        ""
+    $prompt = if ([string]::IsNullOrWhiteSpace($Default)) {
+        $Label
     }
     else {
-        " [$DefaultValue]"
+        '{0} [{1}]' -f $Label, $Default
     }
 
-    $value = Read-Host "$Prompt$suffix"
+    $value = Read-Host $prompt
 
     if ([string]::IsNullOrWhiteSpace($value)) {
-        return $DefaultValue
+        return $Default
     }
 
     return $value.Trim()
 }
 
-function Invoke-NativeCommand {
+function Invoke-ExternalCommand {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [string]$FilePath,
+        [string] $FilePath,
 
         [Parameter()]
-        [string[]]$ArgumentList = @(),
+        [string[]] $ArgumentList = @(),
 
         [Parameter()]
-        [string]$DisplayCommand
+        [AllowEmptyString()]
+        [string] $DisplayName = ''
     )
 
     $startedAt = Get-Date
@@ -179,52 +171,35 @@ function Invoke-NativeCommand {
         $exitCode = 0
     }
 
-    [pscustomobject]@{
-        Command    = if ($DisplayCommand) { $DisplayCommand } else { "$FilePath $($ArgumentList -join ' ')" }
-        ExitCode   = [int]$exitCode
+    $commandName = if ([string]::IsNullOrWhiteSpace($DisplayName)) {
+        ('{0} {1}' -f $FilePath, ($ArgumentList -join ' ')).Trim()
+    }
+    else {
+        $DisplayName
+    }
+
+    return [pscustomobject] @{
+        Command    = $commandName
+        ExitCode   = [int] $exitCode
         Output     = (($output | Out-String).Trim())
         DurationMs = [math]::Round(((Get-Date) - $startedAt).TotalMilliseconds)
     }
 }
 
-function Invoke-PowerShellCommand {
+function Invoke-GitCommand {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [string]$Command
-    )
-
-    $startedAt = Get-Date
-
-    $output = & pwsh -NoLogo -NoProfile -NonInteractive -Command $Command 2>&1
-    $exitCode = $LASTEXITCODE
-
-    if ($null -eq $exitCode) {
-        $exitCode = 0
-    }
-
-    [pscustomobject]@{
-        Command    = $Command
-        ExitCode   = [int]$exitCode
-        Output     = (($output | Out-String).Trim())
-        DurationMs = [math]::Round(((Get-Date) - $startedAt).TotalMilliseconds)
-    }
-}
-
-function Get-GitOutput {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [string[]]$Arguments,
+        [string[]] $ArgumentList,
 
         [Parameter()]
-        [switch]$AllowFailure
+        [switch] $AllowFailure
     )
 
-    $result = Invoke-NativeCommand `
-        -FilePath "git" `
-        -ArgumentList $Arguments `
-        -DisplayCommand "git $($Arguments -join ' ')"
+    $result = Invoke-ExternalCommand `
+        -FilePath 'git' `
+        -ArgumentList $ArgumentList `
+        -DisplayName ('git {0}' -f ($ArgumentList -join ' '))
 
     if (-not $AllowFailure -and $result.ExitCode -ne 0) {
         throw "Git command failed: $($result.Command)`n$($result.Output)"
@@ -233,40 +208,42 @@ function Get-GitOutput {
     return $result
 }
 
-function ConvertTo-CodeBlockValue {
+function Invoke-ValidationCommand {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string] $Command
+    )
+
+    return Invoke-ExternalCommand `
+        -FilePath 'pwsh' `
+        -ArgumentList @(
+            '-NoLogo'
+            '-NoProfile'
+            '-NonInteractive'
+            '-Command'
+            $Command
+        ) `
+        -DisplayName $Command
+}
+
+function Get-TextOrFallback {
     [CmdletBinding()]
     param(
         [Parameter()]
         [AllowNull()]
         [AllowEmptyString()]
-        [string]$Value,
+        [string] $Value,
 
         [Parameter()]
-        [string]$EmptyValue = "(none)"
+        [string] $Fallback = '(none)'
     )
 
     if ([string]::IsNullOrWhiteSpace($Value)) {
-        return $EmptyValue
+        return $Fallback
     }
 
     return $Value.Trim()
-}
-
-function Resolve-OutputFilePath {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [string]$BasePath,
-
-        [Parameter(Mandatory)]
-        [string]$RequestedPath
-    )
-
-    if ([System.IO.Path]::IsPathRooted($RequestedPath)) {
-        return [System.IO.Path]::GetFullPath($RequestedPath)
-    }
-
-    return [System.IO.Path]::GetFullPath((Join-Path $BasePath $RequestedPath))
 }
 
 if (-not (Test-Path -LiteralPath $RepositoryPath -PathType Container)) {
@@ -278,269 +255,327 @@ $resolvedRepositoryPath = (Resolve-Path -LiteralPath $RepositoryPath).Path
 Push-Location -LiteralPath $resolvedRepositoryPath
 
 try {
-    $insideWorkTree = Get-GitOutput -Arguments @("rev-parse", "--is-inside-work-tree")
+    $gitCheck = Invoke-GitCommand -ArgumentList @(
+        'rev-parse'
+        '--is-inside-work-tree'
+    )
 
-    if ($insideWorkTree.Output -ne "true") {
-        throw "The selected folder is not a Git repository: $resolvedRepositoryPath"
+    if ($gitCheck.Output -ne 'true') {
+        throw "The selected path is not a Git repository: $resolvedRepositoryPath"
     }
 
     if ($Interactive) {
-        $Checkpoint = Read-InteractiveValue `
-            -Prompt "Completed checkpoint" `
-            -DefaultValue $Checkpoint
+        $Checkpoint = Read-TrackerValue `
+            -Label 'Completed checkpoint' `
+            -Default $Checkpoint
 
-        $BrowserVerification = Read-InteractiveValue `
-            -Prompt "Manual browser verification" `
-            -DefaultValue $BrowserVerification
+        $BrowserVerification = Read-TrackerValue `
+            -Label 'Manual browser verification' `
+            -Default $BrowserVerification
 
-        $KnownIssues = Read-InteractiveValue `
-            -Prompt "Known issues" `
-            -DefaultValue $KnownIssues
+        $KnownIssues = Read-TrackerValue `
+            -Label 'Known issues' `
+            -Default $KnownIssues
 
-        $PushStatus = Read-InteractiveValue `
-            -Prompt "Push status" `
-            -DefaultValue $PushStatus
+        $PushStatus = Read-TrackerValue `
+            -Label 'Push status' `
+            -Default $PushStatus
 
-        $NextCheckpoint = Read-InteractiveValue `
-            -Prompt "Next checkpoint" `
-            -DefaultValue $NextCheckpoint
+        $NextCheckpoint = Read-TrackerValue `
+            -Label 'Next checkpoint' `
+            -Default $NextCheckpoint
     }
 
     if ([string]::IsNullOrWhiteSpace($Checkpoint)) {
-        $Checkpoint = "Not provided"
+        $Checkpoint = 'Not provided'
     }
 
     if ([string]::IsNullOrWhiteSpace($NextCheckpoint)) {
-        $NextCheckpoint = "Ask the Project tracker to select the next smallest safe checkpoint."
+        $NextCheckpoint = 'Ask the Project tracker to select the next smallest safe checkpoint.'
     }
 
-    $branchResult = Get-GitOutput -Arguments @("branch", "--show-current")
-    $latestCommitResult = Get-GitOutput -Arguments @("log", "-1", "--oneline")
-    $recentCommitsResult = Get-GitOutput -Arguments @(
-        "log",
-        "--oneline",
-        "--decorate",
+    $branchResult = Invoke-GitCommand -ArgumentList @(
+        'branch'
+        '--show-current'
+    )
+
+    $latestCommitResult = Invoke-GitCommand -ArgumentList @(
+        'log'
+        '-1'
+        '--oneline'
+    )
+
+    $recentCommitsResult = Invoke-GitCommand -ArgumentList @(
+        'log'
+        '--oneline'
+        '--decorate'
         "-$RecentCommitCount"
     )
-    $statusResult = Get-GitOutput -Arguments @("status", "--short")
-    $trackedChangesResult = Get-GitOutput -Arguments @("diff", "--name-status")
-    $stagedChangesResult = Get-GitOutput -Arguments @("diff", "--cached", "--name-status")
-    $untrackedFilesResult = Get-GitOutput -Arguments @(
-        "ls-files",
-        "--others",
-        "--exclude-standard"
+
+    $statusResult = Invoke-GitCommand -ArgumentList @(
+        'status'
+        '--short'
     )
 
-    $remoteResult = Get-GitOutput `
-        -Arguments @("remote", "get-url", "origin") `
+    $trackedChangesResult = Invoke-GitCommand -ArgumentList @(
+        'diff'
+        '--name-status'
+    )
+
+    $stagedChangesResult = Invoke-GitCommand -ArgumentList @(
+        'diff'
+        '--cached'
+        '--name-status'
+    )
+
+    $untrackedFilesResult = Invoke-GitCommand -ArgumentList @(
+        'ls-files'
+        '--others'
+        '--exclude-standard'
+    )
+
+    $remoteResult = Invoke-GitCommand `
+        -ArgumentList @(
+            'remote'
+            'get-url'
+            'origin'
+        ) `
         -AllowFailure
 
-    $upstreamResult = Get-GitOutput `
-        -Arguments @(
-        "rev-list",
-        "--left-right",
-        "--count",
-        "HEAD...@{upstream}"
-    ) `
+    $upstreamResult = Invoke-GitCommand `
+        -ArgumentList @(
+            'rev-list'
+            '--left-right'
+            '--count'
+            'HEAD...@{upstream}'
+        ) `
         -AllowFailure
 
-    $remote = if ($remoteResult.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($remoteResult.Output)) {
+    $remoteText = if (
+        $remoteResult.ExitCode -eq 0 -and
+        -not [string]::IsNullOrWhiteSpace($remoteResult.Output)
+    ) {
         $remoteResult.Output
     }
     else {
-        "No origin remote configured"
+        'No origin remote configured'
     }
 
-    $upstreamStatus = if ($upstreamResult.ExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($upstreamResult.Output)) {
-        $parts = $upstreamResult.Output -split "\s+"
+    $upstreamText = 'No upstream tracking branch available'
 
-        if ($parts.Count -ge 2) {
-            "Ahead: $($parts[0]); Behind: $($parts[1])"
+    if (
+        $upstreamResult.ExitCode -eq 0 -and
+        -not [string]::IsNullOrWhiteSpace($upstreamResult.Output)
+    ) {
+        $upstreamParts = @($upstreamResult.Output -split '\s+')
+
+        if ($upstreamParts.Count -ge 2) {
+            $upstreamText = 'Ahead: {0}; Behind: {1}' -f `
+                $upstreamParts[0], `
+                $upstreamParts[1]
         }
         else {
-            $upstreamResult.Output
+            $upstreamText = $upstreamResult.Output
         }
     }
-    else {
-        "No upstream tracking branch available"
-    }
 
-    $validationResults = @()
+    $validationResults = [System.Collections.Generic.List[object]]::new()
 
     if (-not $SkipValidation) {
         foreach ($command in $ValidationCommand) {
-            if ([string]::IsNullOrWhiteSpace($command)) {
-                continue
+            if (-not [string]::IsNullOrWhiteSpace($command)) {
+                [void] $validationResults.Add(
+                    (Invoke-ValidationCommand -Command $command)
+                )
             }
-
-            $validationResults += Invoke-PowerShellCommand -Command $command
         }
     }
 
-    $validationText = if ($SkipValidation) {
-        "- Validation was skipped by request."
-    }
-    elseif ($validationResults.Count -eq 0) {
-        "- No validation commands were supplied."
-    }
-    else {
-        ($validationResults | ForEach-Object {
-            $resultLabel = if ($_.ExitCode -eq 0) { "PASSED" } else { "FAILED" }
-            $displayOutput = if ([string]::IsNullOrWhiteSpace($_.Output)) {
-                "(no output)"
-            }
-            else {
-                $_.Output
-            }
-
-            @"
-- `$($_.Command)`
-  - Result: $resultLabel
-  - Exit code: $($_.ExitCode)
-  - Duration: $($_.DurationMs) ms
-  - Output:
-```text
-$displayOutput
-```
-"@
-        }) -join "`n"
-    }
-
-    $failedValidationCount = @(
-        $validationResults | Where-Object { $_.ExitCode -ne 0 }
-    ).Count
-
-    $status = ConvertTo-CodeBlockValue -Value $statusResult.Output -EmptyValue "(clean)"
-    $trackedChanges = ConvertTo-CodeBlockValue -Value $trackedChangesResult.Output
-    $stagedChanges = ConvertTo-CodeBlockValue -Value $stagedChangesResult.Output
-    $untrackedFiles = ConvertTo-CodeBlockValue -Value $untrackedFilesResult.Output
-    $recentCommits = ConvertTo-CodeBlockValue -Value $recentCommitsResult.Output
-    $branch = ConvertTo-CodeBlockValue -Value $branchResult.Output -EmptyValue "(detached HEAD)"
-    $latestCommit = ConvertTo-CodeBlockValue -Value $latestCommitResult.Output -EmptyValue "(no commits)"
-
-    $repositoryClean = (
-        $status -eq "(clean)" -and
-        $trackedChanges -eq "(none)" -and
-        $stagedChanges -eq "(none)" -and
-        $untrackedFiles -eq "(none)"
+    $failedValidationResults = @(
+        $validationResults |
+            Where-Object { $_.ExitCode -ne 0 }
     )
 
-    $repositoryStateLabel = if ($repositoryClean) {
-        "Clean"
+    $failedValidationCount = $failedValidationResults.Count
+
+    $statusText = Get-TextOrFallback `
+        -Value $statusResult.Output `
+        -Fallback '(clean)'
+
+    $trackedText = Get-TextOrFallback -Value $trackedChangesResult.Output
+    $stagedText = Get-TextOrFallback -Value $stagedChangesResult.Output
+    $untrackedText = Get-TextOrFallback -Value $untrackedFilesResult.Output
+    $recentText = Get-TextOrFallback -Value $recentCommitsResult.Output
+
+    $branchText = Get-TextOrFallback `
+        -Value $branchResult.Output `
+        -Fallback '(detached HEAD)'
+
+    $latestCommitText = Get-TextOrFallback `
+        -Value $latestCommitResult.Output `
+        -Fallback '(no commits)'
+
+    $repositoryIsClean = (
+        $statusText -eq '(clean)' -and
+        $trackedText -eq '(none)' -and
+        $stagedText -eq '(none)' -and
+        $untrackedText -eq '(none)'
+    )
+
+    $repositoryState = if ($repositoryIsClean) {
+        'Clean'
     }
     else {
-        "Changes require review"
+        'Changes require review'
     }
 
-    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz"
+    $lines = [System.Collections.Generic.List[string]]::new()
 
-    $prompt = @"
-The following checkpoint information was generated from the local repository.
+    [void] $lines.Add('The following checkpoint information was generated from the local repository.')
+    [void] $lines.Add('')
+    [void] $lines.Add('Repository:')
+    [void] $lines.Add($resolvedRepositoryPath)
+    [void] $lines.Add('')
+    [void] $lines.Add('Generated:')
+    [void] $lines.Add((Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz'))
+    [void] $lines.Add('')
+    [void] $lines.Add('Completed checkpoint:')
+    [void] $lines.Add($Checkpoint)
+    [void] $lines.Add('')
+    [void] $lines.Add('Confirmed repository facts:')
+    [void] $lines.Add("- Branch: $branchText")
+    [void] $lines.Add("- Origin: $remoteText")
+    [void] $lines.Add("- Upstream status: $upstreamText")
+    [void] $lines.Add("- Latest commit: $latestCommitText")
+    [void] $lines.Add("- Repository state: $repositoryState")
+    [void] $lines.Add("- Push status: $PushStatus")
+    [void] $lines.Add('')
+    [void] $lines.Add('Manual browser verification:')
+    [void] $lines.Add($BrowserVerification)
+    [void] $lines.Add('')
+    [void] $lines.Add('Validation results:')
 
-Repository:
-`$resolvedRepositoryPath`
+    if ($SkipValidation) {
+        [void] $lines.Add('- Validation was skipped by request.')
+    }
+    elseif ($validationResults.Count -eq 0) {
+        [void] $lines.Add('- No validation commands were supplied.')
+    }
+    else {
+        foreach ($validationResult in $validationResults) {
+            $resultLabel = if ($validationResult.ExitCode -eq 0) {
+                'PASSED'
+            }
+            else {
+                'FAILED'
+            }
 
-Generated:
-$timestamp
+            $outputText = Get-TextOrFallback `
+                -Value $validationResult.Output `
+                -Fallback '(no output)'
 
-Completed checkpoint:
-$Checkpoint
+            [void] $lines.Add("- $($validationResult.Command)")
+            [void] $lines.Add("  - Result: $resultLabel")
+            [void] $lines.Add("  - Exit code: $($validationResult.ExitCode)")
+            [void] $lines.Add("  - Duration: $($validationResult.DurationMs) ms")
+            [void] $lines.Add('  - Output:')
+            [void] $lines.Add('~~~text')
+            [void] $lines.Add($outputText)
+            [void] $lines.Add('~~~')
+        }
+    }
 
-Confirmed repository facts:
-- Branch: $branch
-- Origin: $remote
-- Upstream status: $upstreamStatus
-- Latest commit: $latestCommit
-- Repository state: $repositoryStateLabel
-- Push status: $PushStatus
+    [void] $lines.Add('')
 
-Manual browser verification:
-$BrowserVerification
+    [void] $lines.Add('Current Git status:')
+    [void] $lines.Add('~~~text')
+    [void] $lines.Add($statusText)
+    [void] $lines.Add('~~~')
+    [void] $lines.Add('')
 
-Validation results:
-$validationText
+    [void] $lines.Add('Changed tracked files:')
+    [void] $lines.Add('~~~text')
+    [void] $lines.Add($trackedText)
+    [void] $lines.Add('~~~')
+    [void] $lines.Add('')
 
-Current Git status:
-```text
-$status
-```
+    [void] $lines.Add('Staged files:')
+    [void] $lines.Add('~~~text')
+    [void] $lines.Add($stagedText)
+    [void] $lines.Add('~~~')
+    [void] $lines.Add('')
 
-Changed tracked files:
-```text
-$trackedChanges
-```
+    [void] $lines.Add('Untracked files:')
+    [void] $lines.Add('~~~text')
+    [void] $lines.Add($untrackedText)
+    [void] $lines.Add('~~~')
+    [void] $lines.Add('')
 
-Staged files:
-```text
-$stagedChanges
-```
+    [void] $lines.Add('Recent Git history:')
+    [void] $lines.Add('~~~text')
+    [void] $lines.Add($recentText)
+    [void] $lines.Add('~~~')
+    [void] $lines.Add('')
 
-Untracked files:
-```text
-$untrackedFiles
-```
+    [void] $lines.Add('Known issues:')
+    [void] $lines.Add($KnownIssues)
+    [void] $lines.Add('')
+    [void] $lines.Add('Requested next checkpoint:')
+    [void] $lines.Add($NextCheckpoint)
+    [void] $lines.Add('')
+    [void] $lines.Add('Update 00 — Project Control and Checkpoint Tracker.')
+    [void] $lines.Add('')
+    [void] $lines.Add('Then:')
+    [void] $lines.Add('')
+    [void] $lines.Add('1. Reconcile this information against the uploaded approved specification.')
+    [void] $lines.Add('2. Clearly distinguish verified facts from anything still unverified.')
+    [void] $lines.Add('3. Update Current stable checkpoint, Last verified commands, Last verified commit, Next checkpoint, Known issues, and Deferred.')
+    [void] $lines.Add('4. Determine whether the completed checkpoint is stable and ready to remain in Git history.')
+    [void] $lines.Add('5. If the working tree is not clean, identify exactly what still needs review.')
+    [void] $lines.Add('6. Check recent Git history so the requested checkpoint does not repeat committed work.')
+    [void] $lines.Add('7. Prepare one bounded, copy/paste-ready Codex prompt for only the next checkpoint.')
+    [void] $lines.Add('8. Do not assume browser behavior beyond the manual verification stated above.')
+    [void] $lines.Add('9. Do not combine multiple checkpoints or add optional features prematurely.')
 
-Recent Git history:
-```text
-$recentCommits
-```
+    $prompt = $lines -join [Environment]::NewLine
 
-Known issues:
-$KnownIssues
-
-Requested next checkpoint:
-$NextCheckpoint
-
-Update `00 — Project Control and Checkpoint Tracker`.
-
-Then:
-
-1. Reconcile this information against the uploaded approved specification.
-2. Clearly distinguish verified facts from anything still unverified.
-3. Update:
-   - Current stable checkpoint
-   - Last verified commands
-   - Last verified commit
-   - Next checkpoint
-   - Known issues
-   - Deferred
-4. Determine whether the completed checkpoint is stable and ready to remain in Git history.
-5. If the working tree is not clean, identify exactly what still needs review.
-6. Check the recent Git history so the requested next checkpoint does not repeat already committed work.
-7. Prepare one bounded, copy/paste-ready Codex prompt for only the next checkpoint.
-8. Do not assume browser behavior beyond the manual verification stated above.
-9. Do not combine multiple checkpoints or add optional features prematurely.
-"@
-
-    Write-Host ""
-    Write-Host "===== PROJECT TRACKER UPDATE =====" -ForegroundColor Cyan
+    Write-Host ''
+    Write-Host '===== PROJECT TRACKER UPDATE =====' -ForegroundColor Cyan
     Write-Output $prompt
 
     if ($CopyToClipboard) {
-        if (-not (Get-Command Set-Clipboard -ErrorAction SilentlyContinue)) {
-            Write-Warning "Set-Clipboard is unavailable in this PowerShell session."
+        $clipboardCommand = Get-Command `
+            -Name 'Set-Clipboard' `
+            -ErrorAction SilentlyContinue
+
+        if ($null -eq $clipboardCommand) {
+            Write-Warning 'Set-Clipboard is unavailable in this PowerShell session.'
         }
         else {
-            try {
-                Set-Clipboard -Value $prompt
-                Write-Host ""
-                Write-Host "Copied prompt to clipboard." -ForegroundColor Green
-            }
-            catch {
-                Write-Warning "Unable to copy the prompt to the clipboard: $($_.Exception.Message)"
-            }
+            Set-Clipboard -Value $prompt
+            Write-Host ''
+            Write-Host 'Copied prompt to clipboard.' -ForegroundColor Green
         }
     }
 
     if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
-        $resolvedOutputPath = Resolve-OutputFilePath `
-            -BasePath $resolvedRepositoryPath `
-            -RequestedPath $OutputPath
+        $resolvedOutputPath = if (
+            [System.IO.Path]::IsPathRooted($OutputPath)
+        ) {
+            [System.IO.Path]::GetFullPath($OutputPath)
+        }
+        else {
+            [System.IO.Path]::GetFullPath(
+                (Join-Path $resolvedRepositoryPath $OutputPath)
+            )
+        }
 
         $outputDirectory = Split-Path -Parent $resolvedOutputPath
 
-        if (-not [string]::IsNullOrWhiteSpace($outputDirectory) -and
-            -not (Test-Path -LiteralPath $outputDirectory)) {
+        if (
+            -not [string]::IsNullOrWhiteSpace($outputDirectory) -and
+            -not (Test-Path -LiteralPath $outputDirectory)
+        ) {
             New-Item `
                 -ItemType Directory `
                 -Path $outputDirectory `
@@ -552,12 +587,15 @@ Then:
             -Value $prompt `
             -Encoding utf8NoBOM
 
-        Write-Host ""
+        Write-Host ''
         Write-Host "Saved prompt to: $resolvedOutputPath" -ForegroundColor Green
     }
 
     if ($failedValidationCount -gt 0) {
-        Write-Warning "$failedValidationCount validation command(s) failed. Review the generated prompt before committing."
+        Write-Warning (
+            '{0} validation command(s) failed. Review the generated prompt.' -f `
+                $failedValidationCount
+        )
 
         if ($FailOnValidationError) {
             exit 1
