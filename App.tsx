@@ -56,7 +56,6 @@ export default function App() {
   const [selectedStoryId, setSelectedStoryId] = useState<Story['id'] | null>(
     null,
   );
-  const [isCheckingIn, setIsCheckingIn] = useState(false);
   const [calmnessByChild, setCalmnessByChild] =
     useState<CalmnessByChild>({});
   const [notesBefore, setNotesBefore] = useState('');
@@ -67,13 +66,6 @@ export default function App() {
 
   const selectStory = (storyId: Story['id']) => {
     setSelectedStoryId(storyId);
-    setIsCheckingIn(false);
-  };
-
-  const beginCheckIn = () => {
-    if (selectedStoryId !== null) {
-      setIsCheckingIn(true);
-    }
   };
 
   const setChildCalmness = (
@@ -93,9 +85,59 @@ export default function App() {
           <View style={styles.card}>
             <Text style={styles.title}>Bedtime Story Tracker</Text>
             <Text style={styles.introduction}>
-              Choose tonight&apos;s story, then record how calm each child feels
-              before reading.
+              Record how calm each child feels, then choose tonight&apos;s story.
             </Text>
+
+            <View style={styles.checkIn}>
+              <Text style={styles.heading}>Before reading</Text>
+              <Text style={styles.checkInPrompt}>
+                How calm does each child feel? 1 is very restless and 5 is
+                very calm.
+              </Text>
+
+              {children.map((child) => (
+                <View key={child.id} style={styles.childCheckIn}>
+                  <Text style={styles.childName}>{child.name}</Text>
+                  <View style={styles.calmnessRow}>
+                    {calmnessValues.map((value) => {
+                      const isSelected = calmnessByChild[child.id] === value;
+
+                      return (
+                        <Pressable
+                          accessibilityLabel={`${child.name} calmness ${value}`}
+                          accessibilityRole="button"
+                          key={value}
+                          onPress={() => setChildCalmness(child.id, value)}
+                          style={[
+                            styles.calmnessButton,
+                            isSelected && styles.selectedCalmness,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.calmnessText,
+                              isSelected && styles.selectedCalmnessText,
+                            ]}
+                          >
+                            {value}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+
+              <Text style={styles.notesLabel}>Optional notes</Text>
+              <TextInput
+                accessibilityLabel="Pre-reading notes"
+                multiline
+                onChangeText={setNotesBefore}
+                placeholder="Anything helpful to remember before reading?"
+                style={styles.notesInput}
+                value={notesBefore}
+              />
+            </View>
 
             <Text style={styles.heading}>Choose a story</Text>
             <View style={styles.storyList}>
@@ -137,75 +179,6 @@ export default function App() {
               </View>
             ) : (
               <Text style={styles.prompt}>Select a story to continue.</Text>
-            )}
-
-            {!isCheckingIn && (
-              <Pressable
-                accessibilityRole="button"
-                disabled={!selectedStory}
-                onPress={beginCheckIn}
-                style={[
-                  styles.primaryButton,
-                  !selectedStory && styles.disabledButton,
-                ]}
-              >
-                <Text style={styles.primaryButtonText}>
-                  Continue to pre-reading check-in
-                </Text>
-              </Pressable>
-            )}
-
-            {isCheckingIn && selectedStory && (
-              <View style={styles.checkIn}>
-                <Text style={styles.heading}>Before reading</Text>
-                <Text style={styles.checkInPrompt}>
-                  How calm does each child feel? 1 is very restless and 5 is
-                  very calm.
-                </Text>
-
-                {children.map((child) => (
-                  <View key={child.id} style={styles.childCheckIn}>
-                    <Text style={styles.childName}>{child.name}</Text>
-                    <View style={styles.calmnessRow}>
-                      {calmnessValues.map((value) => {
-                        const isSelected = calmnessByChild[child.id] === value;
-
-                        return (
-                          <Pressable
-                            accessibilityLabel={`${child.name} calmness ${value}`}
-                            accessibilityRole="button"
-                            key={value}
-                            onPress={() => setChildCalmness(child.id, value)}
-                            style={[
-                              styles.calmnessButton,
-                              isSelected && styles.selectedCalmness,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.calmnessText,
-                                isSelected && styles.selectedCalmnessText,
-                              ]}
-                            >
-                              {value}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </View>
-                ))}
-
-                <Text style={styles.notesLabel}>Optional notes</Text>
-                <TextInput
-                  accessibilityLabel="Pre-reading notes"
-                  multiline
-                  onChangeText={setNotesBefore}
-                  placeholder="Anything helpful to remember before reading?"
-                  style={styles.notesInput}
-                  value={notesBefore}
-                />
-              </View>
             )}
           </View>
         </ScrollView>
@@ -299,25 +272,8 @@ const styles = StyleSheet.create({
     marginTop: 16,
     textAlign: 'center',
   },
-  primaryButton: {
-    alignItems: 'center',
-    backgroundColor: '#51407e',
-    borderRadius: 10,
-    marginTop: 18,
-    padding: 14,
-  },
-  disabledButton: {
-    opacity: 0.45,
-  },
-  primaryButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
   checkIn: {
-    borderTopColor: '#ded8eb',
-    borderTopWidth: 1,
-    marginTop: 26,
+    marginTop: 0,
   },
   checkInPrompt: {
     color: '#5d5575',
