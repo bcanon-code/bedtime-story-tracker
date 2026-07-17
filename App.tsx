@@ -12,13 +12,9 @@ import {
   SafeAreaView,
 } from 'react-native-safe-area-context';
 
-type CalmnessValue = 1 | 2 | 3 | 4 | 5;
+import { Story, storyCatalog } from './src/data/storyCatalog';
 
-interface Story {
-  id: string;
-  title: string;
-  description: string;
-}
+type CalmnessValue = 1 | 2 | 3 | 4 | 5;
 
 interface Child {
   id: string;
@@ -35,23 +31,7 @@ const formatElapsedTime = (elapsedSeconds: number) => {
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
-const stories: Story[] = [
-  {
-    id: 'moonlit-garden',
-    title: 'The Moonlit Garden',
-    description: 'A quiet walk among silver flowers and sleepy fireflies.',
-  },
-  {
-    id: 'cloud-boat',
-    title: 'The Little Cloud Boat',
-    description: 'A tiny boat sails gently across the evening sky.',
-  },
-  {
-    id: 'owl-library',
-    title: "Ollie's Night Library",
-    description: 'A friendly owl helps the forest find the perfect bedtime tale.',
-  },
-];
+const { stories } = storyCatalog;
 
 const children: Child[] = [
   { id: 'avery', name: 'Avery' },
@@ -287,7 +267,15 @@ export default function App() {
                             isSelected && styles.selectedStoryText,
                           ]}
                         >
-                          {story.description}
+                          {story.summary}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.storyMetadata,
+                            isSelected && styles.selectedStoryText,
+                          ]}
+                        >
+                          {story.readingMinutes} min · {story.theme}
                         </Text>
                         {isSelected && (
                           <Text style={styles.selectedLabel}>✓ Selected</Text>
@@ -302,6 +290,9 @@ export default function App() {
                     <View style={styles.selectionSummary}>
                       <Text style={styles.summaryLabel}>Selected story</Text>
                       <Text style={styles.summaryValue}>{selectedStory.title}</Text>
+                      <Text style={styles.summaryDescription}>
+                        {selectedStory.summary}
+                      </Text>
                     </View>
                     <Pressable
                       accessibilityRole="button"
@@ -477,6 +468,12 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginTop: 4,
   },
+  storyMetadata: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: theme.spacing.sm,
+  },
   selectedStoryText: {
     color: theme.colors.textPrimary,
   },
@@ -505,6 +502,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginTop: 3,
+  },
+  summaryDescription: {
+    color: theme.colors.textSecondary,
+    lineHeight: 21,
+    marginTop: theme.spacing.xs,
   },
   prompt: {
     color: theme.colors.textSecondary,
