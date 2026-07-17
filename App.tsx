@@ -52,6 +52,37 @@ const children: Child[] = [
 
 const calmnessValues: CalmnessValue[] = [1, 2, 3, 4, 5];
 
+const theme = {
+  colors: {
+    background: '#111827',
+    surface: '#1B2433',
+    surfaceRaised: '#243044',
+    textPrimary: '#F4EBDD',
+    textSecondary: '#BFC7D4',
+    primary: '#D6A85F',
+    primaryPressed: '#BF8F47',
+    selected: '#376B70',
+    selectedPressed: '#2E5B60',
+    surfacePressed: '#2A384D',
+    border: '#526176',
+    error: '#E6A09A',
+    disabled: '#788497',
+  },
+  spacing: {
+    xs: 6,
+    sm: 10,
+    md: 16,
+    lg: 24,
+    xl: 32,
+  },
+  radius: {
+    sm: 10,
+    md: 14,
+    lg: 20,
+    round: 24,
+  },
+};
+
 export default function App() {
   const [selectedStoryId, setSelectedStoryId] = useState<Story['id'] | null>(
     null,
@@ -88,19 +119,24 @@ export default function App() {
           <View style={styles.card}>
             <Text style={styles.title}>Bedtime Story Tracker</Text>
             <Text style={styles.introduction}>
-              Record how calm each child feels, then choose tonight&apos;s story.
+              A quiet check-in before tonight&apos;s story.
             </Text>
 
             <View style={styles.checkIn}>
+              <Text style={styles.stepLabel}>Step 1 of 2</Text>
               <Text style={styles.heading}>Before reading</Text>
               <Text style={styles.checkInPrompt}>
-                How calm does each child feel? 1 is very restless and 5 is
-                very calm.
+                Choose the observed calmness for each child.
               </Text>
 
               {children.map((child) => (
                 <View key={child.id} style={styles.childCheckIn}>
-                  <Text style={styles.childName}>{child.name} (required)</Text>
+                  <Text style={styles.childName}>
+                    How calm is {child.name} right now?
+                  </Text>
+                  <Text style={styles.requiredLabel}>
+                    Required · 1 restless, 5 very calm
+                  </Text>
                   <View style={styles.calmnessRow}>
                     {calmnessValues.map((value) => {
                       const isSelected = calmnessByChild[child.id] === value;
@@ -112,9 +148,11 @@ export default function App() {
                           accessibilityState={{ selected: isSelected }}
                           key={value}
                           onPress={() => setChildCalmness(child.id, value)}
-                          style={[
+                          style={({ pressed }) => [
                             styles.calmnessButton,
+                            pressed && styles.pressedCalmness,
                             isSelected && styles.selectedCalmness,
+                            pressed && isSelected && styles.pressedSelected,
                           ]}
                         >
                           <Text
@@ -123,7 +161,7 @@ export default function App() {
                               isSelected && styles.selectedCalmnessText,
                             ]}
                           >
-                            {value}
+                            {isSelected ? `✓ ${value}` : value}
                           </Text>
                         </Pressable>
                       );
@@ -132,12 +170,13 @@ export default function App() {
                 </View>
               ))}
 
-              <Text style={styles.notesLabel}>Optional notes</Text>
+              <Text style={styles.notesLabel}>Notes, optional</Text>
               <TextInput
                 accessibilityLabel="Pre-reading notes"
                 multiline
                 onChangeText={setNotesBefore}
                 placeholder="Anything helpful to remember before reading?"
+                placeholderTextColor={theme.colors.disabled}
                 style={styles.notesInput}
                 value={notesBefore}
               />
@@ -145,7 +184,8 @@ export default function App() {
 
             {isPreReadingComplete ? (
               <>
-                <Text style={styles.heading}>Choose a story</Text>
+                <Text style={styles.stepLabel}>Step 2 of 2</Text>
+                <Text style={styles.heading}>Choose tonight&apos;s story</Text>
                 <View style={styles.storyList}>
                   {stories.map((story) => {
                     const isSelected = story.id === selectedStoryId;
@@ -156,9 +196,11 @@ export default function App() {
                         accessibilityState={{ selected: isSelected }}
                         key={story.id}
                         onPress={() => selectStory(story.id)}
-                        style={[
+                        style={({ pressed }) => [
                           styles.storyButton,
+                          pressed && styles.pressedStory,
                           isSelected && styles.selectedStory,
+                          pressed && isSelected && styles.pressedSelected,
                         ]}
                       >
                         <Text
@@ -177,6 +219,9 @@ export default function App() {
                         >
                           {story.description}
                         </Text>
+                        {isSelected && (
+                          <Text style={styles.selectedLabel}>✓ Selected</Text>
+                        )}
                       </Pressable>
                     );
                   })}
@@ -193,9 +238,12 @@ export default function App() {
               </>
             ) : (
               <View style={styles.lockedStep}>
-                <Text style={styles.lockedStepTitle}>Choose a story</Text>
+                <Text style={styles.lockedStepLabel}>Step 2 of 2 · Locked</Text>
+                <Text style={styles.lockedStepTitle}>
+                  Choose tonight&apos;s story
+                </Text>
                 <Text style={styles.validationMessage}>
-                  Complete both calmness check-ins to choose a story.
+                  Complete both check-ins to choose a story.
                 </Text>
               </View>
             )}
@@ -208,102 +256,137 @@ export default function App() {
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: '#f4f0ff',
+    backgroundColor: theme.colors.background,
     flex: 1,
   },
   page: {
     alignItems: 'center',
-    padding: 24,
+    padding: theme.spacing.lg,
   },
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
     maxWidth: 620,
-    padding: 28,
+    padding: theme.spacing.xl,
     width: '100%',
   },
   title: {
-    color: '#2f2454',
+    color: theme.colors.textPrimary,
     fontSize: 32,
     fontWeight: '700',
     textAlign: 'center',
   },
   introduction: {
-    color: '#5d5575',
+    color: theme.colors.textSecondary,
     fontSize: 16,
     lineHeight: 24,
     marginTop: 10,
     textAlign: 'center',
   },
   heading: {
-    color: '#2f2454',
+    color: theme.colors.textPrimary,
     fontSize: 22,
     fontWeight: '700',
-    marginBottom: 12,
-    marginTop: 26,
+    marginBottom: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+  },
+  stepLabel: {
+    color: theme.colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginTop: theme.spacing.xl,
+    textTransform: 'uppercase',
   },
   storyList: {
-    gap: 10,
+    gap: theme.spacing.sm,
   },
   storyButton: {
-    borderColor: '#c9c1df',
-    borderRadius: 12,
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
     borderWidth: 2,
-    padding: 16,
+    minHeight: 88,
+    padding: theme.spacing.md,
+  },
+  pressedStory: {
+    backgroundColor: theme.colors.surfacePressed,
+    borderColor: theme.colors.primary,
   },
   selectedStory: {
-    backgroundColor: '#51407e',
-    borderColor: '#51407e',
+    backgroundColor: theme.colors.selected,
+    borderColor: theme.colors.primary,
   },
   storyTitle: {
-    color: '#2f2454',
+    color: theme.colors.textPrimary,
     fontSize: 18,
     fontWeight: '700',
   },
   storyDescription: {
-    color: '#5d5575',
+    color: theme.colors.textSecondary,
     lineHeight: 21,
     marginTop: 4,
   },
   selectedStoryText: {
-    color: '#ffffff',
+    color: theme.colors.textPrimary,
+  },
+  selectedLabel: {
+    color: theme.colors.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: theme.spacing.sm,
   },
   selectionSummary: {
-    backgroundColor: '#f4f0ff',
-    borderRadius: 10,
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.selected,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
     marginTop: 18,
     padding: 14,
   },
   summaryLabel: {
-    color: '#6b6185',
+    color: theme.colors.textSecondary,
     fontSize: 13,
     fontWeight: '600',
     textTransform: 'uppercase',
   },
   summaryValue: {
-    color: '#2f2454',
+    color: theme.colors.textPrimary,
     fontSize: 18,
     fontWeight: '700',
     marginTop: 3,
   },
   prompt: {
-    color: '#6b6185',
+    color: theme.colors.textSecondary,
     marginTop: 16,
     textAlign: 'center',
   },
   lockedStep: {
-    backgroundColor: '#f4f0ff',
-    borderRadius: 10,
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.disabled,
+    borderRadius: theme.radius.md,
+    borderStyle: 'dashed',
+    borderWidth: 1,
     marginTop: 26,
-    padding: 16,
+    padding: theme.spacing.md,
+  },
+  lockedStepLabel: {
+    color: theme.colors.disabled,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   lockedStepTitle: {
-    color: '#2f2454',
+    color: theme.colors.textSecondary,
     fontSize: 18,
     fontWeight: '700',
+    marginTop: theme.spacing.xs,
   },
   validationMessage: {
-    color: '#5d5575',
+    color: theme.colors.error,
     lineHeight: 21,
     marginTop: 6,
   },
@@ -311,57 +394,78 @@ const styles = StyleSheet.create({
     marginTop: 0,
   },
   checkInPrompt: {
-    color: '#5d5575',
+    color: theme.colors.textSecondary,
     lineHeight: 22,
-    marginBottom: 18,
+    marginBottom: theme.spacing.lg,
   },
   childCheckIn: {
-    marginBottom: 18,
+    backgroundColor: theme.colors.surfaceRaised,
+    borderRadius: theme.radius.md,
+    marginBottom: theme.spacing.md,
+    padding: theme.spacing.md,
   },
   childName: {
-    color: '#2f2454',
+    color: theme.colors.textPrimary,
     fontSize: 17,
     fontWeight: '700',
-    marginBottom: 8,
+    marginBottom: 4,
+  },
+  requiredLabel: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    marginBottom: theme.spacing.sm,
   },
   calmnessRow: {
     flexDirection: 'row',
-    gap: 10,
+    flexWrap: 'wrap',
+    gap: theme.spacing.sm,
   },
   calmnessButton: {
     alignItems: 'center',
-    borderColor: '#9e93ba',
-    borderRadius: 22,
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.round,
     borderWidth: 2,
-    height: 44,
+    height: 48,
     justifyContent: 'center',
-    width: 44,
+    minWidth: 48,
+    paddingHorizontal: theme.spacing.sm,
+  },
+  pressedCalmness: {
+    backgroundColor: theme.colors.surfacePressed,
+    borderColor: theme.colors.primary,
   },
   selectedCalmness: {
-    backgroundColor: '#51407e',
-    borderColor: '#51407e',
+    backgroundColor: theme.colors.selected,
+    borderColor: theme.colors.primary,
+  },
+  pressedSelected: {
+    backgroundColor: theme.colors.selectedPressed,
   },
   calmnessText: {
-    color: '#51407e',
+    color: theme.colors.textPrimary,
     fontSize: 16,
     fontWeight: '700',
   },
   selectedCalmnessText: {
-    color: '#ffffff',
+    color: theme.colors.textPrimary,
   },
   notesLabel: {
-    color: '#2f2454',
+    color: theme.colors.textPrimary,
     fontSize: 17,
     fontWeight: '700',
     marginBottom: 8,
   },
   notesInput: {
-    borderColor: '#9e93ba',
-    borderRadius: 10,
-    borderWidth: 1,
-    color: '#2f2454',
-    minHeight: 96,
-    padding: 12,
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.sm,
+    borderWidth: 2,
+    color: theme.colors.textPrimary,
+    fontSize: 16,
+    lineHeight: 23,
+    minHeight: 104,
+    padding: theme.spacing.md,
     textAlignVertical: 'top',
   },
 });
