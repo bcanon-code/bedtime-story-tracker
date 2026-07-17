@@ -63,6 +63,9 @@ export default function App() {
   const selectedStory = stories.find(
     (story) => story.id === selectedStoryId,
   );
+  const isPreReadingComplete =
+    calmnessByChild.avery !== undefined &&
+    calmnessByChild.jordan !== undefined;
 
   const selectStory = (storyId: Story['id']) => {
     setSelectedStoryId(storyId);
@@ -97,7 +100,7 @@ export default function App() {
 
               {children.map((child) => (
                 <View key={child.id} style={styles.childCheckIn}>
-                  <Text style={styles.childName}>{child.name}</Text>
+                  <Text style={styles.childName}>{child.name} (required)</Text>
                   <View style={styles.calmnessRow}>
                     {calmnessValues.map((value) => {
                       const isSelected = calmnessByChild[child.id] === value;
@@ -106,6 +109,7 @@ export default function App() {
                         <Pressable
                           accessibilityLabel={`${child.name} calmness ${value}`}
                           accessibilityRole="button"
+                          accessibilityState={{ selected: isSelected }}
                           key={value}
                           onPress={() => setChildCalmness(child.id, value)}
                           style={[
@@ -139,46 +143,61 @@ export default function App() {
               />
             </View>
 
-            <Text style={styles.heading}>Choose a story</Text>
-            <View style={styles.storyList}>
-              {stories.map((story) => {
-                const isSelected = story.id === selectedStoryId;
+            {isPreReadingComplete ? (
+              <>
+                <Text style={styles.heading}>Choose a story</Text>
+                <View style={styles.storyList}>
+                  {stories.map((story) => {
+                    const isSelected = story.id === selectedStoryId;
 
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    key={story.id}
-                    onPress={() => selectStory(story.id)}
-                    style={[styles.storyButton, isSelected && styles.selectedStory]}
-                  >
-                    <Text
-                      style={[
-                        styles.storyTitle,
-                        isSelected && styles.selectedStoryText,
-                      ]}
-                    >
-                      {story.title}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.storyDescription,
-                        isSelected && styles.selectedStoryText,
-                      ]}
-                    >
-                      {story.description}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+                    return (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: isSelected }}
+                        key={story.id}
+                        onPress={() => selectStory(story.id)}
+                        style={[
+                          styles.storyButton,
+                          isSelected && styles.selectedStory,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.storyTitle,
+                            isSelected && styles.selectedStoryText,
+                          ]}
+                        >
+                          {story.title}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.storyDescription,
+                            isSelected && styles.selectedStoryText,
+                          ]}
+                        >
+                          {story.description}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
 
-            {selectedStory ? (
-              <View style={styles.selectionSummary}>
-                <Text style={styles.summaryLabel}>Selected story</Text>
-                <Text style={styles.summaryValue}>{selectedStory.title}</Text>
-              </View>
+                {selectedStory ? (
+                  <View style={styles.selectionSummary}>
+                    <Text style={styles.summaryLabel}>Selected story</Text>
+                    <Text style={styles.summaryValue}>{selectedStory.title}</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.prompt}>Select a story to continue.</Text>
+                )}
+              </>
             ) : (
-              <Text style={styles.prompt}>Select a story to continue.</Text>
+              <View style={styles.lockedStep}>
+                <Text style={styles.lockedStepTitle}>Choose a story</Text>
+                <Text style={styles.validationMessage}>
+                  Complete both calmness check-ins to choose a story.
+                </Text>
+              </View>
             )}
           </View>
         </ScrollView>
@@ -271,6 +290,22 @@ const styles = StyleSheet.create({
     color: '#6b6185',
     marginTop: 16,
     textAlign: 'center',
+  },
+  lockedStep: {
+    backgroundColor: '#f4f0ff',
+    borderRadius: 10,
+    marginTop: 26,
+    padding: 16,
+  },
+  lockedStepTitle: {
+    color: '#2f2454',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  validationMessage: {
+    color: '#5d5575',
+    lineHeight: 21,
+    marginTop: 6,
   },
   checkIn: {
     marginTop: 0,
