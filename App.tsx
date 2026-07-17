@@ -138,19 +138,41 @@ export default function App() {
           ]}
         >
           {workflowStep !== 'setup' && selectedStory ? (
-            <View style={styles.readingCard}>
-              <Text style={styles.readingLabel}>
-                {isReading ? 'Now reading' : 'Reading finished'}
-              </Text>
-              <Text style={styles.readingStoryTitle}>{selectedStory.title}</Text>
-              <Text
-                accessibilityLabel={`Elapsed time ${formatElapsedTime(elapsedSeconds)}`}
-                accessibilityLiveRegion="polite"
-                style={styles.timer}
-              >
-                {formatElapsedTime(elapsedSeconds)}
-              </Text>
-              {isReading ? (
+            <View style={styles.readingView}>
+              <View style={styles.readingHeader}>
+                <Text style={styles.readingLabel}>
+                  {isReading ? 'Now reading' : 'Reading finished'}
+                </Text>
+                <Text accessibilityRole="header" style={styles.readingStoryTitle}>
+                  {selectedStory.title}
+                </Text>
+                <Text style={styles.readingEstimate}>
+                  Estimated reading time · {selectedStory.readingMinutes} min
+                </Text>
+                <Text
+                  accessibilityLabel={`${isReading ? 'Elapsed' : 'Final'} reading time ${formatElapsedTime(elapsedSeconds)}`}
+                  accessibilityLiveRegion="polite"
+                  style={styles.timer}
+                >
+                  {formatElapsedTime(elapsedSeconds)}
+                </Text>
+                {!isReading && (
+                  <Text style={styles.finalDuration}>Final reading time</Text>
+                )}
+              </View>
+
+              <View style={styles.storyText}>
+                {selectedStory.paragraphs.map((paragraph, index) => (
+                  <Text
+                    key={`${selectedStory.id}-${index}`}
+                    style={styles.storyParagraph}
+                  >
+                    {paragraph}
+                  </Text>
+                ))}
+              </View>
+
+              {isReading && (
                 <Pressable
                   accessibilityRole="button"
                   onPress={finishReading}
@@ -161,8 +183,6 @@ export default function App() {
                 >
                   <Text style={styles.primaryButtonText}>Finish reading</Text>
                 </Pressable>
-              ) : (
-                <Text style={styles.finalDuration}>Final reading time</Text>
               )}
             </View>
           ) : (
@@ -348,17 +368,16 @@ const styles = StyleSheet.create({
   },
   readingPage: {
     flexGrow: 1,
-    justifyContent: 'center',
   },
-  readingCard: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    maxWidth: 620,
-    padding: theme.spacing.xl,
+  readingView: {
+    maxWidth: 720,
     width: '100%',
+  },
+  readingHeader: {
+    alignItems: 'center',
+    borderBottomColor: theme.colors.border,
+    borderBottomWidth: 1,
+    paddingBottom: theme.spacing.lg,
   },
   readingLabel: {
     color: theme.colors.primary,
@@ -374,13 +393,29 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
     textAlign: 'center',
   },
+  readingEstimate: {
+    color: theme.colors.textSecondary,
+    fontSize: 15,
+    marginTop: theme.spacing.sm,
+    textAlign: 'center',
+  },
   timer: {
     color: theme.colors.textPrimary,
-    fontSize: 64,
+    fontSize: 52,
     fontVariant: ['tabular-nums'],
     fontWeight: '700',
     letterSpacing: 2,
-    marginVertical: theme.spacing.xl,
+    marginTop: theme.spacing.lg,
+  },
+  storyText: {
+    paddingTop: theme.spacing.xl,
+  },
+  storyParagraph: {
+    color: theme.colors.textPrimary,
+    fontSize: 20,
+    lineHeight: 31,
+    marginBottom: 18,
+    textAlign: 'left',
   },
   beginButton: {
     alignItems: 'center',
@@ -395,9 +430,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.colors.primary,
     borderRadius: theme.radius.md,
+    marginTop: theme.spacing.md,
     minHeight: 52,
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.xl,
+    width: '100%',
   },
   pressedPrimaryButton: {
     backgroundColor: theme.colors.primaryPressed,
@@ -410,6 +447,7 @@ const styles = StyleSheet.create({
   finalDuration: {
     color: theme.colors.textSecondary,
     fontSize: 16,
+    marginTop: theme.spacing.xs,
   },
   title: {
     color: theme.colors.textPrimary,
