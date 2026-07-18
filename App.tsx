@@ -12,9 +12,12 @@ import {
   SafeAreaView,
 } from 'react-native-safe-area-context';
 
+import {
+  CalmnessSelector,
+  CalmnessValue,
+} from './src/components/CalmnessSelector';
 import { Story, storyCatalog } from './src/data/storyCatalog';
-
-type CalmnessValue = 1 | 2 | 3 | 4 | 5;
+import { theme } from './src/theme';
 
 interface Child {
   id: string;
@@ -37,39 +40,6 @@ const children: Child[] = [
   { id: 'avery', name: 'Avery' },
   { id: 'jordan', name: 'Jordan' },
 ];
-
-const calmnessValues: CalmnessValue[] = [1, 2, 3, 4, 5];
-
-const theme = {
-  colors: {
-    background: '#111827',
-    surface: '#1B2433',
-    surfaceRaised: '#243044',
-    textPrimary: '#F4EBDD',
-    textSecondary: '#BFC7D4',
-    primary: '#D6A85F',
-    primaryPressed: '#BF8F47',
-    selected: '#376B70',
-    selectedPressed: '#2E5B60',
-    surfacePressed: '#2A384D',
-    border: '#526176',
-    error: '#E6A09A',
-    disabled: '#788497',
-  },
-  spacing: {
-    xs: 6,
-    sm: 10,
-    md: 16,
-    lg: 24,
-    xl: 32,
-  },
-  radius: {
-    sm: 10,
-    md: 14,
-    lg: 20,
-    round: 24,
-  },
-};
 
 export default function App() {
   const [selectedStoryId, setSelectedStoryId] = useState<Story['id'] | null>(
@@ -131,66 +101,76 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.screen}>
-        <ScrollView
-          contentContainerStyle={[
-            styles.page,
-            workflowStep !== 'setup' && styles.readingPage,
-          ]}
-        >
-          {workflowStep !== 'setup' && selectedStory ? (
-            <View style={styles.readingView}>
-              <View style={styles.readingHeader}>
-                <Text style={styles.readingLabel}>
-                  {isReading ? 'Now reading' : 'Reading finished'}
-                </Text>
-                <Text accessibilityRole="header" style={styles.readingStoryTitle}>
-                  {selectedStory.title}
-                </Text>
-                <Text style={styles.readingEstimate}>
-                  Estimated reading time · {selectedStory.readingMinutes} min
-                </Text>
-                <Text
-                  accessibilityLabel={`${isReading ? 'Elapsed' : 'Final'} reading time ${formatElapsedTime(elapsedSeconds)}`}
-                  accessibilityLiveRegion="polite"
-                  style={styles.timer}
-                >
-                  {formatElapsedTime(elapsedSeconds)}
-                </Text>
-                {!isReading && (
-                  <Text style={styles.finalDuration}>Final reading time</Text>
+        {workflowStep !== 'setup' && selectedStory ? (
+          <View style={styles.readingScreen}>
+            <ScrollView
+              style={styles.storyScrollView}
+              contentContainerStyle={styles.storyContent}
+            >
+              <View style={styles.readingView}>
+                <View style={styles.readingHeader}>
+                  <Text style={styles.readingLabel}>
+                    {isReading ? 'Now reading' : 'Reading finished'}
+                  </Text>
+                  <Text
+                    accessibilityRole="header"
+                    style={styles.readingStoryTitle}
+                  >
+                    {selectedStory.title}
+                  </Text>
+                  <Text style={styles.readingEstimate}>
+                    Estimated reading time · {selectedStory.readingMinutes} min
+                  </Text>
+                </View>
+
+                <View style={styles.storyText}>
+                  {selectedStory.paragraphs.map((paragraph, index) => (
+                    <Text
+                      key={`${selectedStory.id}-${index}`}
+                      style={styles.storyParagraph}
+                    >
+                      {paragraph}
+                    </Text>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.readingControlBar}>
+              <View style={styles.readingControls}>
+                <View>
+                  <Text style={styles.timerLabel}>
+                    {isReading ? 'Elapsed' : 'Final time'}
+                  </Text>
+                  <Text
+                    accessibilityLabel={`${isReading ? 'Elapsed' : 'Final'} reading time ${formatElapsedTime(elapsedSeconds)}`}
+                    style={styles.timer}
+                  >
+                    {formatElapsedTime(elapsedSeconds)}
+                  </Text>
+                </View>
+                {isReading && (
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={finishReading}
+                    style={({ pressed }) => [
+                      styles.finishButton,
+                      pressed && styles.pressedPrimaryButton,
+                    ]}
+                  >
+                    <Text style={styles.primaryButtonText}>Finish reading</Text>
+                  </Pressable>
                 )}
               </View>
-
-              <View style={styles.storyText}>
-                {selectedStory.paragraphs.map((paragraph, index) => (
-                  <Text
-                    key={`${selectedStory.id}-${index}`}
-                    style={styles.storyParagraph}
-                  >
-                    {paragraph}
-                  </Text>
-                ))}
-              </View>
-
-              {isReading && (
-                <Pressable
-                  accessibilityRole="button"
-                  onPress={finishReading}
-                  style={({ pressed }) => [
-                    styles.finishButton,
-                    pressed && styles.pressedPrimaryButton,
-                  ]}
-                >
-                  <Text style={styles.primaryButtonText}>Finish reading</Text>
-                </Pressable>
-              )}
             </View>
-          ) : (
-          <View style={styles.card}>
-            <Text style={styles.title}>Bedtime Story Tracker</Text>
-            <Text style={styles.introduction}>
-              A quiet check-in before tonight&apos;s story.
-            </Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.page}>
+            <View style={styles.card}>
+              <Text style={styles.title}>Bedtime Story Tracker</Text>
+              <Text style={styles.introduction}>
+                A quiet check-in before tonight&apos;s story.
+              </Text>
 
             <View style={styles.checkIn}>
               <Text style={styles.stepLabel}>Step 1 of 2</Text>
@@ -200,44 +180,12 @@ export default function App() {
               </Text>
 
               {children.map((child) => (
-                <View key={child.id} style={styles.childCheckIn}>
-                  <Text style={styles.childName}>
-                    How calm is {child.name} right now?
-                  </Text>
-                  <Text style={styles.requiredLabel}>
-                    Required · 1 restless, 5 very calm
-                  </Text>
-                  <View style={styles.calmnessRow}>
-                    {calmnessValues.map((value) => {
-                      const isSelected = calmnessByChild[child.id] === value;
-
-                      return (
-                        <Pressable
-                          accessibilityLabel={`${child.name} calmness ${value}`}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: isSelected }}
-                          key={value}
-                          onPress={() => setChildCalmness(child.id, value)}
-                          style={({ pressed }) => [
-                            styles.calmnessButton,
-                            pressed && styles.pressedCalmness,
-                            isSelected && styles.selectedCalmness,
-                            pressed && isSelected && styles.pressedSelected,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.calmnessText,
-                              isSelected && styles.selectedCalmnessText,
-                            ]}
-                          >
-                            {isSelected ? `✓ ${value}` : value}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
+                <CalmnessSelector
+                  childName={child.name}
+                  key={child.id}
+                  onChange={(value) => setChildCalmness(child.id, value)}
+                  value={calmnessByChild[child.id] ?? null}
+                />
               ))}
 
               <Text style={styles.notesLabel}>Notes, optional</Text>
@@ -340,9 +288,9 @@ export default function App() {
                 </Text>
               </View>
             )}
-          </View>
-          )}
-        </ScrollView>
+            </View>
+          </ScrollView>
+        )}
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -366,8 +314,17 @@ const styles = StyleSheet.create({
     padding: theme.spacing.xl,
     width: '100%',
   },
-  readingPage: {
-    flexGrow: 1,
+  readingScreen: {
+    flex: 1,
+  },
+  storyScrollView: {
+    flex: 1,
+  },
+  storyContent: {
+    alignItems: 'center',
+    paddingBottom: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
   },
   readingView: {
     maxWidth: 720,
@@ -401,11 +358,18 @@ const styles = StyleSheet.create({
   },
   timer: {
     color: theme.colors.textPrimary,
-    fontSize: 52,
+    fontSize: 24,
     fontVariant: ['tabular-nums'],
     fontWeight: '700',
-    letterSpacing: 2,
-    marginTop: theme.spacing.lg,
+    letterSpacing: 1,
+    lineHeight: 27,
+  },
+  timerLabel: {
+    color: theme.colors.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+    lineHeight: 13,
+    textTransform: 'uppercase',
   },
   storyText: {
     paddingTop: theme.spacing.xl,
@@ -430,10 +394,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: theme.colors.primary,
     borderRadius: theme.radius.md,
-    marginTop: theme.spacing.md,
-    minHeight: 52,
+    minHeight: 48,
     justifyContent: 'center',
-    paddingHorizontal: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  readingControlBar: {
+    backgroundColor: theme.colors.surface,
+    borderTopColor: theme.colors.border,
+    borderTopWidth: 1,
+    minHeight: 64,
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.xs,
+  },
+  readingControls: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    maxWidth: 720,
     width: '100%',
   },
   pressedPrimaryButton: {
@@ -443,11 +421,6 @@ const styles = StyleSheet.create({
     color: theme.colors.background,
     fontSize: 17,
     fontWeight: '700',
-  },
-  finalDuration: {
-    color: theme.colors.textSecondary,
-    fontSize: 16,
-    marginTop: theme.spacing.xs,
   },
   title: {
     color: theme.colors.textPrimary,
@@ -495,6 +468,9 @@ const styles = StyleSheet.create({
   selectedStory: {
     backgroundColor: theme.colors.selected,
     borderColor: theme.colors.primary,
+  },
+  pressedSelected: {
+    backgroundColor: theme.colors.selectedPressed,
   },
   storyTitle: {
     color: theme.colors.textPrimary,
@@ -585,58 +561,6 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     lineHeight: 22,
     marginBottom: theme.spacing.lg,
-  },
-  childCheckIn: {
-    backgroundColor: theme.colors.surfaceRaised,
-    borderRadius: theme.radius.md,
-    marginBottom: theme.spacing.md,
-    padding: theme.spacing.md,
-  },
-  childName: {
-    color: theme.colors.textPrimary,
-    fontSize: 17,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  requiredLabel: {
-    color: theme.colors.textSecondary,
-    fontSize: 13,
-    marginBottom: theme.spacing.sm,
-  },
-  calmnessRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.sm,
-  },
-  calmnessButton: {
-    alignItems: 'center',
-    backgroundColor: theme.colors.surface,
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.round,
-    borderWidth: 2,
-    height: 48,
-    justifyContent: 'center',
-    minWidth: 48,
-    paddingHorizontal: theme.spacing.sm,
-  },
-  pressedCalmness: {
-    backgroundColor: theme.colors.surfacePressed,
-    borderColor: theme.colors.primary,
-  },
-  selectedCalmness: {
-    backgroundColor: theme.colors.selected,
-    borderColor: theme.colors.primary,
-  },
-  pressedSelected: {
-    backgroundColor: theme.colors.selectedPressed,
-  },
-  calmnessText: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  selectedCalmnessText: {
-    color: theme.colors.textPrimary,
   },
   notesLabel: {
     color: theme.colors.textPrimary,
