@@ -48,6 +48,9 @@ export default function App() {
   const [calmnessByChild, setCalmnessByChild] =
     useState<CalmnessByChild>({});
   const [notesBefore, setNotesBefore] = useState('');
+  const [calmnessAfterByChild, setCalmnessAfterByChild] =
+    useState<CalmnessByChild>({});
+  const [notesAfter, setNotesAfter] = useState('');
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>('setup');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
@@ -57,6 +60,9 @@ export default function App() {
   const isPreReadingComplete =
     calmnessByChild.avery !== undefined &&
     calmnessByChild.jordan !== undefined;
+  const isPostReadingComplete =
+    calmnessAfterByChild.avery !== undefined &&
+    calmnessAfterByChild.jordan !== undefined;
   const isReading = workflowStep === 'reading';
 
   useEffect(() => {
@@ -85,6 +91,16 @@ export default function App() {
     }));
   };
 
+  const setChildCalmnessAfter = (
+    childId: Child['id'],
+    value: CalmnessValue,
+  ) => {
+    setCalmnessAfterByChild((current) => ({
+      ...current,
+      [childId]: value,
+    }));
+  };
+
   const beginReading = () => {
     if (!isPreReadingComplete || !selectedStory) {
       return;
@@ -101,7 +117,64 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.screen}>
-        {workflowStep !== 'setup' && selectedStory ? (
+        {workflowStep === 'finished' && selectedStory ? (
+          <ScrollView contentContainerStyle={styles.page}>
+            <View style={styles.card}>
+              <Text style={styles.stepLabel}>After the story</Text>
+              <Text accessibilityRole="header" style={styles.heading}>
+                After reading
+              </Text>
+              <Text style={styles.checkInPrompt}>
+                Choose the observed calmness for each child now.
+              </Text>
+
+              {children.map((child) => (
+                <CalmnessSelector
+                  childName={child.name}
+                  key={child.id}
+                  onChange={(value) =>
+                    setChildCalmnessAfter(child.id, value)
+                  }
+                  value={calmnessAfterByChild[child.id] ?? null}
+                />
+              ))}
+
+              <Text style={styles.notesLabel}>Notes, optional</Text>
+              <TextInput
+                accessibilityLabel="Post-reading notes"
+                multiline
+                onChangeText={setNotesAfter}
+                placeholder="Anything helpful to remember after reading?"
+                placeholderTextColor={theme.colors.disabled}
+                style={styles.notesInput}
+                value={notesAfter}
+              />
+
+              <View style={styles.finalDuration}>
+                <Text style={styles.summaryLabel}>Reading time</Text>
+                <Text
+                  accessibilityLabel={`Final reading time ${formatElapsedTime(elapsedSeconds)}`}
+                  style={styles.finalDurationValue}
+                >
+                  {formatElapsedTime(elapsedSeconds)}
+                </Text>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !isPostReadingComplete }}
+                disabled={!isPostReadingComplete}
+                style={({ pressed }) => [
+                  styles.continueButton,
+                  !isPostReadingComplete && styles.disabledButton,
+                  pressed && styles.pressedPrimaryButton,
+                ]}
+              >
+                <Text style={styles.primaryButtonText}>Continue to summary</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        ) : workflowStep === 'reading' && selectedStory ? (
           <View style={styles.readingScreen}>
             <ScrollView
               style={styles.storyScrollView}
@@ -110,7 +183,7 @@ export default function App() {
               <View style={styles.readingView}>
                 <View style={styles.readingHeader}>
                   <Text style={styles.readingLabel}>
-                    {isReading ? 'Now reading' : 'Reading finished'}
+                    Now reading
                   </Text>
                   <Text
                     accessibilityRole="header"
@@ -140,27 +213,25 @@ export default function App() {
               <View style={styles.readingControls}>
                 <View>
                   <Text style={styles.timerLabel}>
-                    {isReading ? 'Elapsed' : 'Final time'}
+                    Elapsed
                   </Text>
                   <Text
-                    accessibilityLabel={`${isReading ? 'Elapsed' : 'Final'} reading time ${formatElapsedTime(elapsedSeconds)}`}
+                    accessibilityLabel={`Elapsed reading time ${formatElapsedTime(elapsedSeconds)}`}
                     style={styles.timer}
                   >
                     {formatElapsedTime(elapsedSeconds)}
                   </Text>
                 </View>
-                {isReading && (
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={finishReading}
-                    style={({ pressed }) => [
-                      styles.finishButton,
-                      pressed && styles.pressedPrimaryButton,
-                    ]}
-                  >
-                    <Text style={styles.primaryButtonText}>Finish reading</Text>
-                  </Pressable>
-                )}
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={finishReading}
+                  style={({ pressed }) => [
+                    styles.finishButton,
+                    pressed && styles.pressedPrimaryButton,
+                  ]}
+                >
+                  <Text style={styles.primaryButtonText}>Finish reading</Text>
+                </Pressable>
               </View>
             </View>
           </View>
@@ -390,6 +461,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: theme.spacing.lg,
   },
+  continueButton: {
+    alignItems: 'center',
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.md,
+    justifyContent: 'center',
+    marginTop: theme.spacing.lg,
+    minHeight: 52,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  disabledButton: {
+    backgroundColor: theme.colors.disabled,
+  },
   finishButton: {
     alignItems: 'center',
     backgroundColor: theme.colors.primary,
@@ -504,6 +587,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     marginTop: 18,
     padding: 14,
+  },
+  finalDuration: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
+    marginTop: theme.spacing.lg,
+    padding: theme.spacing.md,
+  },
+  finalDurationValue: {
+    color: theme.colors.textPrimary,
+    fontSize: 24,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '700',
+    letterSpacing: 1,
+    marginTop: theme.spacing.xs,
   },
   summaryLabel: {
     color: theme.colors.textSecondary,
