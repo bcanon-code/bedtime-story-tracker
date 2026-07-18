@@ -25,7 +25,7 @@ interface Child {
 }
 
 type CalmnessByChild = Partial<Record<Child['id'], CalmnessValue>>;
-type WorkflowStep = 'setup' | 'reading' | 'finished';
+type WorkflowStep = 'setup' | 'reading' | 'finished' | 'summary';
 
 const formatElapsedTime = (elapsedSeconds: number) => {
   const minutes = Math.floor(elapsedSeconds / 60);
@@ -33,6 +33,9 @@ const formatElapsedTime = (elapsedSeconds: number) => {
 
   return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
+
+const formatCalmnessChange = (change: number) =>
+  change > 0 ? `+${change}` : String(change);
 
 const { stories } = storyCatalog;
 
@@ -114,10 +117,95 @@ export default function App() {
     setWorkflowStep('finished');
   };
 
+  const continueToSummary = () => {
+    if (!isPostReadingComplete) {
+      return;
+    }
+
+    setWorkflowStep('summary');
+  };
+
+  const resetSession = () => {
+    setWorkflowStep('setup');
+    setSelectedStoryId(null);
+    setCalmnessByChild({});
+    setNotesBefore('');
+    setElapsedSeconds(0);
+    setCalmnessAfterByChild({});
+    setNotesAfter('');
+  };
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.screen}>
-        {workflowStep === 'finished' && selectedStory ? (
+        {workflowStep === 'summary' && selectedStory ? (
+          <ScrollView contentContainerStyle={styles.page}>
+            <View style={styles.card}>
+              <Text style={styles.stepLabel}>Completed session</Text>
+              <Text accessibilityRole="header" style={styles.heading}>
+                Session summary
+              </Text>
+
+              <View style={styles.summarySection}>
+                <Text style={styles.summaryLabel}>Selected story</Text>
+                <Text style={styles.summaryValue}>{selectedStory.title}</Text>
+              </View>
+
+              <View style={styles.summarySection}>
+                <Text style={styles.summaryLabel}>Reading time</Text>
+                <Text
+                  accessibilityLabel={`Final reading time ${formatElapsedTime(elapsedSeconds)}`}
+                  style={styles.finalDurationValue}
+                >
+                  {formatElapsedTime(elapsedSeconds)}
+                </Text>
+              </View>
+
+              {children.map((child) => {
+                const before = calmnessByChild[child.id]!;
+                const after = calmnessAfterByChild[child.id]!;
+                const change = after - before;
+
+                return (
+                  <View key={child.id} style={styles.summarySection}>
+                    <Text style={styles.summaryChildName}>{child.name}</Text>
+                    <Text style={styles.calmnessComparison}>
+                      Before reading: {before} → After reading: {after}
+                    </Text>
+                    <Text style={styles.changeValue}>
+                      Observed change: {formatCalmnessChange(change)}
+                    </Text>
+                  </View>
+                );
+              })}
+
+              {notesBefore.trim() ? (
+                <View style={styles.summarySection}>
+                  <Text style={styles.summaryLabel}>Before-reading notes</Text>
+                  <Text style={styles.summaryNotes}>{notesBefore}</Text>
+                </View>
+              ) : null}
+
+              {notesAfter.trim() ? (
+                <View style={styles.summarySection}>
+                  <Text style={styles.summaryLabel}>After-reading notes</Text>
+                  <Text style={styles.summaryNotes}>{notesAfter}</Text>
+                </View>
+              ) : null}
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={resetSession}
+                style={({ pressed }) => [
+                  styles.continueButton,
+                  pressed && styles.pressedPrimaryButton,
+                ]}
+              >
+                <Text style={styles.primaryButtonText}>Start another session</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        ) : workflowStep === 'finished' && selectedStory ? (
           <ScrollView contentContainerStyle={styles.page}>
             <View style={styles.card}>
               <Text style={styles.stepLabel}>After the story</Text>
@@ -164,6 +252,7 @@ export default function App() {
                 accessibilityRole="button"
                 accessibilityState={{ disabled: !isPostReadingComplete }}
                 disabled={!isPostReadingComplete}
+                onPress={continueToSummary}
                 style={({ pressed }) => [
                   styles.continueButton,
                   !isPostReadingComplete && styles.disabledButton,
@@ -602,6 +691,37 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     fontWeight: '700',
     letterSpacing: 1,
+    marginTop: theme.spacing.xs,
+  },
+  summarySection: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.sm,
+    borderWidth: 1,
+    marginTop: theme.spacing.md,
+    padding: theme.spacing.md,
+  },
+  summaryChildName: {
+    color: theme.colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: theme.spacing.sm,
+  },
+  calmnessComparison: {
+    color: theme.colors.textPrimary,
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  changeValue: {
+    color: theme.colors.textSecondary,
+    fontSize: 15,
+    fontWeight: '600',
+    marginTop: theme.spacing.xs,
+  },
+  summaryNotes: {
+    color: theme.colors.textPrimary,
+    fontSize: 16,
+    lineHeight: 23,
     marginTop: theme.spacing.xs,
   },
   summaryLabel: {
