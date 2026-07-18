@@ -1,6 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Story } from '../data/storyCatalog';
 import {
   formatCalmnessChange,
   formatElapsedTime,
@@ -8,25 +7,25 @@ import {
 import { theme } from '../theme';
 import { CalmnessValue } from './CalmnessSelector';
 
-export interface SessionSummaryChild {
+export interface ChildSessionSummary {
   id: string;
   name: string;
-  calmnessBefore: CalmnessValue;
-  calmnessAfter: CalmnessValue;
+  beforeCalmness: CalmnessValue;
+  afterCalmness: CalmnessValue;
 }
 
 export interface SessionSummaryCardProps {
-  story: Story;
-  childSummaries: readonly SessionSummaryChild[];
+  storyTitle: string;
+  children: readonly ChildSessionSummary[];
   elapsedSeconds: number;
-  notesBefore: string;
-  notesAfter: string;
+  notesBefore?: string;
+  notesAfter?: string;
   onReset: () => void;
 }
 
 export function SessionSummaryCard({
-  story,
-  childSummaries,
+  storyTitle,
+  children,
   elapsedSeconds,
   notesBefore,
   notesAfter,
@@ -43,7 +42,7 @@ export function SessionSummaryCard({
 
       <View style={styles.summarySection}>
         <Text style={styles.summaryLabel}>Selected story</Text>
-        <Text style={styles.summaryValue}>{story.title}</Text>
+        <Text style={styles.summaryValue}>{storyTitle}</Text>
       </View>
 
       <View style={styles.summarySection}>
@@ -56,15 +55,15 @@ export function SessionSummaryCard({
         </Text>
       </View>
 
-      {childSummaries.map((child) => {
-        const change = child.calmnessAfter - child.calmnessBefore;
+      {children.map((child) => {
+        const change = child.afterCalmness - child.beforeCalmness;
 
         return (
           <View key={child.id} style={styles.summarySection}>
             <Text style={styles.summaryChildName}>{child.name}</Text>
             <Text style={styles.calmnessComparison}>
-              Before reading: {child.calmnessBefore} → After reading:{' '}
-              {child.calmnessAfter}
+              Before reading: {child.beforeCalmness} → After reading:{' '}
+              {child.afterCalmness}
             </Text>
             <Text style={styles.changeValue}>
               Observed change: {formatCalmnessChange(change)}
@@ -73,14 +72,14 @@ export function SessionSummaryCard({
         );
       })}
 
-      {notesBefore.trim() ? (
+      {notesBefore?.trim() ? (
         <View style={styles.summarySection}>
           <Text style={styles.summaryLabel}>Before-reading notes</Text>
           <Text style={styles.summaryNotes}>{notesBefore}</Text>
         </View>
       ) : null}
 
-      {notesAfter.trim() ? (
+      {notesAfter?.trim() ? (
         <View style={styles.summarySection}>
           <Text style={styles.summaryLabel}>After-reading notes</Text>
           <Text style={styles.summaryNotes}>{notesAfter}</Text>
@@ -88,6 +87,7 @@ export function SessionSummaryCard({
       ) : null}
 
       <Pressable
+        accessibilityHint="Returns to the initial setup and clears the current session"
         accessibilityLabel="Start another bedtime story session"
         accessibilityRole="button"
         onPress={onReset}

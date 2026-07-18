@@ -133,16 +133,16 @@ export default function App() {
         {workflowStep === 'summary' && selectedStory ? (
           <ScrollView contentContainerStyle={styles.page}>
             <SessionSummaryCard
-              childSummaries={children.map((child) => ({
+              children={children.map((child) => ({
                 ...child,
-                calmnessBefore: calmnessByChild[child.id]!,
-                calmnessAfter: calmnessAfterByChild[child.id]!,
+                beforeCalmness: calmnessByChild[child.id]!,
+                afterCalmness: calmnessAfterByChild[child.id]!,
               }))}
               elapsedSeconds={elapsedSeconds}
               notesAfter={notesAfter}
               notesBefore={notesBefore}
               onReset={resetSession}
-              story={selectedStory}
+              storyTitle={selectedStory.title}
             />
           </ScrollView>
         ) : workflowStep === 'finished' && selectedStory ? (
