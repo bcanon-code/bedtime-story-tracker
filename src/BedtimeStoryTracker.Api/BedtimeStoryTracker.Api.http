@@ -1,0 +1,6 @@
+@BedtimeStoryTracker.Api_HostAddress = https://localhost:7048
+
+GET {{BedtimeStoryTracker.Api_HostAddress}}/health
+Accept: application/json
+
+###
