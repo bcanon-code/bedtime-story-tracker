@@ -1,6 +1,6 @@
 # Bedtime Story Tracker
 
-Bedtime Story Tracker is a small React Native Web and TypeScript interview demo for recording a fictional bedtime reading session. It demonstrates a complete, deliberately scoped workflow without a backend or persistent storage.
+Bedtime Story Tracker is a small React Native Web and TypeScript interview demo for recording a fictional bedtime reading session. It includes a deliberately scoped ASP.NET Core API that persists the fictional children and story catalog in local SQL Server; session workflow state remains frontend-only and in memory.
 
 ## Demo use case
 
@@ -15,10 +15,15 @@ A parent records an observed calmness value for each fictional child, optionally
 - TypeScript 6.0.3 in strict mode
 - Local React state
 - Typed JSON story data
+- ASP.NET Core .NET 10 API with built-in OpenAPI and Scalar
+- EF Core 10 with local SQL Server
 
 ## Prerequisites
 
 - Node.js and npm
+- .NET SDK 10
+- A local default SQL Server instance accessible as `localhost` with Windows authentication
+- The `dotnet-ef` 10 tool
 
 The repository does not declare a required Node.js or npm version. Use a Node.js version supported by Expo 57. The committed npm lockfile is lockfile version 3.
 
@@ -36,10 +41,33 @@ npm run web
 
 Expo starts the development server and prints the local web URL in the terminal. Open that URL if a browser does not open automatically.
 
+## Run the API
+
+The development connection string in `src/BedtimeStoryTracker.Api/appsettings.Development.json` targets only `BedtimeStoryTrackerDemo` on `localhost` using Windows authentication. Verify that server name for your machine before starting:
+
+```bash
+dotnet run --project src/BedtimeStoryTracker.Api/BedtimeStoryTracker.Api.csproj
+```
+
+In Development, API startup applies EF Core migrations and idempotently inserts missing fictional demo children and stories. This is a local-demo convenience, not a production migration strategy. The API is available at `http://localhost:5076`; Scalar is at `http://localhost:5076/scalar/v1`.
+
+To drop and recreate only the demo database from migrations, then seed it on the next API start:
+
+```powershell
+.\scripts\Reset-Database.ps1
+```
+
+To launch the API and Expo Web together and open the frontend and Scalar in Chrome:
+
+```powershell
+.\scripts\Start-LocalDemo.ps1
+```
+
 ## Validation
 
 ```bash
 npx tsc --noEmit
+dotnet build src/BedtimeStoryTracker.Api/BedtimeStoryTracker.Api.csproj
 ```
 
 The same TypeScript check is also available as `npm run typecheck`. This repository does not define lint or automated test scripts.
@@ -63,11 +91,12 @@ The same TypeScript check is also available as `npm run typecheck`. This reposit
 - [`index.ts`](index.ts) registers the Expo root component.
 - [`App.tsx`](App.tsx) coordinates the workflow and its local state. Conditional rendering selects the setup, reading, post-reading, or summary view.
 - [`src/components/CalmnessSelector.tsx`](src/components/CalmnessSelector.tsx) is a reusable controlled component with typed values, props, and change events.
-- [`src/data/stories.json`](src/data/stories.json) contains original mock stories; [`src/data/storyCatalog.ts`](src/data/storyCatalog.ts) defines their TypeScript shape and exposes the catalog.
+- [`src/data/stories.json`](src/data/stories.json) contains original mock stories; [`src/data/storyCatalog.ts`](src/data/storyCatalog.ts) defines their TypeScript shape and exposes the catalog. The API embeds the same JSON file for idempotent development seeding.
+- [`src/BedtimeStoryTracker.Api`](src/BedtimeStoryTracker.Api) contains the single ASP.NET Core API project, EF Core context and migrations, fictional seed data, and read-only child/story endpoints.
 - A `useEffect` in `App.tsx` owns the timer interval and cleanup for the reading step.
 - [`src/theme.ts`](src/theme.ts) centralizes low-light colors, spacing, and radius tokens.
 
-State remains in memory and flows down through props. Required-value completeness and calmness changes are derived from the current state rather than stored separately.
+Session state remains in memory and flows down through props. Required-value completeness and calmness changes are derived from the current state rather than stored separately. The frontend is intentionally not connected to the API yet.
 
 ## Important design decisions
 
@@ -81,7 +110,7 @@ State remains in memory and flows down through props. Required-value completenes
 
 ## Current limitations
 
-- No saved session history, database, or backend
+- No saved session history or frontend/API integration
 - No authentication
 - No analytics or recommendations
 - No claim of medical or behavioral effectiveness
@@ -110,4 +139,4 @@ State remains in memory and flows down through props. Required-value completenes
 
 ## Data and privacy
 
-Avery and Jordan are fictional names. Notes are entered only at runtime and are not saved. The catalog contains original fictional stories and neutral mock metadata; no real child or private family data is included in the application content.
+Avery and Jordan are fictional names. Notes are entered only at runtime and are not saved. The local database contains only the fictional children and original story catalog; no real child or private family data is included in the application content.
