@@ -20,8 +20,8 @@ public static class DevelopmentDataSeeder
 
         var children = new[]
         {
-            new Child { Id = "avery", Name = "Avery", DisplayOrder = 1 },
-            new Child { Id = "jordan", Name = "Jordan", DisplayOrder = 2 },
+            new Child { Id = "vincent", Name = "Vincent", DisplayOrder = 1 },
+            new Child { Id = "charlie", Name = "Charlie", DisplayOrder = 2 },
         };
 
         dbContext.Children.AddRange(children.Where(child => !childIds.Contains(child.Id)));
