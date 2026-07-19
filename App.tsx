@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -18,6 +18,7 @@ import {
 } from './src/components/CalmnessSelector';
 import { SessionSummaryCard } from './src/components/SessionSummaryCard';
 import {
+  createReadingSession,
   getChildren,
   getStories,
   getStoryById,
@@ -33,6 +34,7 @@ interface Child {
 
 type CalmnessByChild = Partial<Record<Child['id'], CalmnessValue>>;
 type WorkflowStep = 'setup' | 'reading' | 'finished' | 'summary';
+type SaveStatus = 'not-saved' | 'saving' | 'saved' | 'failed';
 
 export default function App() {
   const [children, setChildren] = useState<Child[]>([]);
@@ -57,6 +59,9 @@ export default function App() {
   const [notesAfter, setNotesAfter] = useState('');
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>('setup');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('not-saved');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const saveInFlightRef = useRef(false);
 
   const selectedStorySummary = stories.find(
     (story) => story.id === selectedStoryId,
@@ -201,12 +206,42 @@ export default function App() {
     setWorkflowStep('finished');
   };
 
+  const saveSession = async () => {
+    if (!selectedStory || saveInFlightRef.current || saveStatus === 'saved') {
+      return;
+    }
+
+    saveInFlightRef.current = true;
+    setSaveStatus('saving');
+    setSaveError(null);
+    try {
+      await createReadingSession({
+        storyId: selectedStory.id,
+        elapsedSeconds,
+        beforeNotes: notesBefore.trim() || undefined,
+        afterNotes: notesAfter.trim() || undefined,
+        childObservations: children.map((child) => ({
+          childId: child.id,
+          beforeCalmness: calmnessByChild[child.id]!,
+          afterCalmness: calmnessAfterByChild[child.id]!,
+        })),
+      });
+      setSaveStatus('saved');
+    } catch (error: unknown) {
+      setSaveError(error instanceof Error ? error.message : 'An unexpected error occurred.');
+      setSaveStatus('failed');
+    } finally {
+      saveInFlightRef.current = false;
+    }
+  };
+
   const continueToSummary = () => {
     if (!isPostReadingComplete) {
       return;
     }
 
     setWorkflowStep('summary');
+    void saveSession();
   };
 
   const resetSession = () => {
@@ -217,6 +252,9 @@ export default function App() {
     setElapsedSeconds(0);
     setCalmnessAfterByChild({});
     setNotesAfter('');
+    setSaveStatus('not-saved');
+    setSaveError(null);
+    saveInFlightRef.current = false;
   };
 
   const retryInitialLoad = () => {
@@ -269,6 +307,9 @@ export default function App() {
               notesAfter={notesAfter}
               notesBefore={notesBefore}
               onReset={resetSession}
+              onSave={() => void saveSession()}
+              saveError={saveError}
+              saveStatus={saveStatus}
               storyTitle={selectedStory.title}
             />
           </ScrollView>

@@ -12,6 +12,7 @@ export const theme = {
     surfacePressed: '#2A384D',
     border: '#526176',
     error: '#E6A09A',
+    success: '#8ED1B2',
     disabled: '#788497',
   },
   spacing: {

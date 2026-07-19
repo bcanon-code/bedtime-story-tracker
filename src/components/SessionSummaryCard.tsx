@@ -1,4 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import {
   formatCalmnessChange,
@@ -21,6 +27,9 @@ export interface SessionSummaryCardProps {
   notesBefore?: string;
   notesAfter?: string;
   onReset: () => void;
+  onSave: () => void;
+  saveError: string | null;
+  saveStatus: 'not-saved' | 'saving' | 'saved' | 'failed';
 }
 
 export function SessionSummaryCard({
@@ -30,8 +39,14 @@ export function SessionSummaryCard({
   notesBefore,
   notesAfter,
   onReset,
+  onSave,
+  saveError,
+  saveStatus,
 }: SessionSummaryCardProps) {
   const formattedElapsedTime = formatElapsedTime(elapsedSeconds);
+  const isSaving = saveStatus === 'saving';
+  const isSaved = saveStatus === 'saved';
+  const hasSaveFailed = saveStatus === 'failed';
 
   return (
     <View style={styles.card}>
@@ -86,17 +101,82 @@ export function SessionSummaryCard({
         </View>
       ) : null}
 
-      <Pressable
-        accessibilityHint="Returns to the initial setup and clears the current session"
-        accessibilityLabel="Start another bedtime story session"
-        accessibilityRole="button"
-        onPress={onReset}
-        style={({ pressed }) => [
-          styles.continueButton,
-          pressed && styles.pressedPrimaryButton,
+      <View
+        accessibilityLiveRegion="polite"
+        style={[
+          styles.savePanel,
+          hasSaveFailed && styles.savePanelError,
+          isSaved && styles.savePanelSuccess,
         ]}
       >
-        <Text style={styles.primaryButtonText}>Start another session</Text>
+        <View style={styles.saveStatusHeading}>
+          {isSaving ? (
+            <ActivityIndicator color={theme.colors.primary} size="small" />
+          ) : (
+            <Text
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+              style={[
+                styles.statusIcon,
+                hasSaveFailed && styles.saveError,
+                isSaved && styles.saveSuccess,
+              ]}
+            >
+              {isSaved ? '✓' : hasSaveFailed ? '!' : '○'}
+            </Text>
+          )}
+          <Text style={styles.saveStatusTitle}>
+            {isSaving
+              ? 'Saving session…'
+              : isSaved
+                ? 'Session saved'
+                : hasSaveFailed
+                  ? 'Session not saved'
+                  : 'Preparing to save…'}
+          </Text>
+        </View>
+        <Text style={[styles.saveStatusMessage, hasSaveFailed && styles.saveError]}>
+          {isSaved
+            ? 'Your completed session is safely stored.'
+            : isSaving
+              ? 'Keep this screen open while the save finishes.'
+              : hasSaveFailed
+                ? saveError ?? 'Something went wrong. Your summary is still here.'
+                : 'This completed session will save automatically.'}
+        </Text>
+
+        {hasSaveFailed ? (
+          <Pressable
+            accessibilityHint="Retries saving this completed session"
+            accessibilityLabel="Retry saving session"
+            accessibilityRole="button"
+            onPress={onSave}
+            style={({ pressed }) => [
+              styles.saveButton,
+              pressed && styles.pressedPrimaryButton,
+            ]}
+          >
+            <Text style={styles.primaryButtonText}>Try again</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      <Pressable
+        accessibilityHint={isSaved ? 'Returns to setup for another session' : 'Clears this unsaved session and returns to setup'}
+        accessibilityLabel={isSaved ? 'Start another bedtime story session' : 'Discard unsaved session and start another'}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: isSaving }}
+        disabled={isSaving}
+        onPress={onReset}
+        style={({ pressed }) => [
+          styles.secondaryButton,
+          isSaving && styles.secondaryButtonDisabled,
+          pressed && !isSaving && styles.pressedSecondaryButton,
+        ]}
+      >
+        <Text style={styles.secondaryButtonText}>
+          {isSaved ? 'Start another session' : 'Discard and start another'}
+        </Text>
       </Pressable>
     </View>
   );
@@ -178,17 +258,84 @@ const styles = StyleSheet.create({
     lineHeight: 23,
     marginTop: theme.spacing.xs,
   },
-  continueButton: {
+  savePanel: {
+    backgroundColor: theme.colors.surfaceRaised,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    borderWidth: 1,
+    marginTop: theme.spacing.lg,
+    padding: theme.spacing.md,
+  },
+  savePanelError: {
+    borderColor: theme.colors.error,
+  },
+  savePanelSuccess: {
+    borderColor: theme.colors.success,
+  },
+  saveStatusHeading: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  statusIcon: {
+    color: theme.colors.textSecondary,
+    fontSize: 20,
+    fontWeight: '700',
+    width: 20,
+  },
+  saveStatusTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  saveStatusMessage: {
+    color: theme.colors.textSecondary,
+    lineHeight: 21,
+    marginTop: theme.spacing.sm,
+  },
+  saveButton: {
     alignItems: 'center',
     backgroundColor: theme.colors.primary,
     borderRadius: theme.radius.md,
     justifyContent: 'center',
-    marginTop: theme.spacing.lg,
+    marginTop: theme.spacing.md,
     minHeight: 52,
     paddingHorizontal: theme.spacing.lg,
   },
   pressedPrimaryButton: {
     backgroundColor: theme.colors.primaryPressed,
+  },
+  disabledButton: {
+    backgroundColor: theme.colors.disabled,
+  },
+  saveError: {
+    color: theme.colors.error,
+  },
+  saveSuccess: {
+    color: theme.colors.success,
+  },
+  secondaryButton: {
+    alignItems: 'center',
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    borderWidth: 2,
+    justifyContent: 'center',
+    marginTop: theme.spacing.md,
+    minHeight: 52,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  pressedSecondaryButton: {
+    backgroundColor: theme.colors.surfacePressed,
+    borderColor: theme.colors.primary,
+  },
+  secondaryButtonDisabled: {
+    borderColor: theme.colors.disabled,
+    opacity: 0.6,
+  },
+  secondaryButtonText: {
+    color: theme.colors.textPrimary,
+    fontSize: 17,
+    fontWeight: '700',
   },
   primaryButtonText: {
     color: theme.colors.background,

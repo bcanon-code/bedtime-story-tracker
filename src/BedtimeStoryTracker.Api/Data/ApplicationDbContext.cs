@@ -12,6 +12,11 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
 
     public DbSet<StoryParagraph> StoryParagraphs => Set<StoryParagraph>();
 
+    public DbSet<ReadingSession> ReadingSessions => Set<ReadingSession>();
+
+    public DbSet<ReadingSessionChildObservation> ReadingSessionChildObservations =>
+        Set<ReadingSessionChildObservation>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Child>(entity =>
@@ -49,6 +54,54 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
                 .WithMany(story => story.Paragraphs)
                 .HasForeignKey(paragraph => paragraph.StoryId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ReadingSession>(entity =>
+        {
+            entity.ToTable("ReadingSessions", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_ReadingSessions_ElapsedSeconds",
+                    "[ElapsedSeconds] > 0 AND [ElapsedSeconds] <= 86400");
+                table.HasCheckConstraint(
+                    "CK_ReadingSessions_CompletedAfterStarted",
+                    "[CompletedAtUtc] >= [StartedAtUtc]");
+            });
+            entity.HasKey(session => session.Id);
+            entity.Property(session => session.StoryId).HasMaxLength(100);
+            entity.Property(session => session.StoryTitleSnapshot).HasMaxLength(200).IsRequired();
+            entity.Property(session => session.BeforeNotes).HasMaxLength(2000);
+            entity.Property(session => session.AfterNotes).HasMaxLength(2000);
+            entity.HasOne(session => session.Story)
+                .WithMany()
+                .HasForeignKey(session => session.StoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ReadingSessionChildObservation>(entity =>
+        {
+            entity.ToTable("ReadingSessionChildObservations", table =>
+            {
+                table.HasCheckConstraint(
+                    "CK_ReadingSessionChildObservations_BeforeCalmness",
+                    "[BeforeCalmness] >= 1 AND [BeforeCalmness] <= 5");
+                table.HasCheckConstraint(
+                    "CK_ReadingSessionChildObservations_AfterCalmness",
+                    "[AfterCalmness] >= 1 AND [AfterCalmness] <= 5");
+            });
+            entity.HasKey(observation => observation.Id);
+            entity.Property(observation => observation.ChildId).HasMaxLength(100);
+            entity.Property(observation => observation.ChildNameSnapshot).HasMaxLength(100).IsRequired();
+            entity.HasIndex(observation => new
+                { observation.ReadingSessionId, observation.ChildId }).IsUnique();
+            entity.HasOne(observation => observation.ReadingSession)
+                .WithMany(session => session.ChildObservations)
+                .HasForeignKey(observation => observation.ReadingSessionId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(observation => observation.Child)
+                .WithMany()
+                .HasForeignKey(observation => observation.ChildId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
