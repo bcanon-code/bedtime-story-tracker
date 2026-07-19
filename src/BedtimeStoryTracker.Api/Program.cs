@@ -13,12 +13,13 @@ var applicationDatabase = builder.Configuration.GetConnectionString("Application
         "Connection string 'ApplicationDatabase' is required.");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(applicationDatabase));
+var frontendOrigin = builder.Configuration["FrontendOrigin"] ?? "http://localhost:8081";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(developmentFrontendPolicy, policy =>
     {
         policy
-            .WithOrigins("http://localhost:8081")
+            .WithOrigins(frontendOrigin)
             .WithMethods(
                 HttpMethods.Get,
                 HttpMethods.Post,

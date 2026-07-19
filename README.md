@@ -63,6 +63,9 @@ To launch the API and Expo Web together and open the frontend and Scalar in Chro
 .\scripts\Start-LocalDemo.ps1
 ```
 
+For a versioned Docker deployment on a trusted local testing server, see
+[`docs/server-deployment.md`](docs/server-deployment.md).
+
 ## Validation
 
 ```bash
