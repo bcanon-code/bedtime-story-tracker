@@ -159,7 +159,7 @@ try {
 
     $env:DEPLOYMENT_VERSION = $gitSha
     $env:BUILD_DATE = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-    $composeArguments = @('--env-file', $environmentPath, '-f', $composeFile)
+    $composeArguments = @('compose', '--env-file', $environmentPath, '-f', $composeFile)
 
     Write-Host "Building deployment images for Git revision $gitSha..." -ForegroundColor Cyan
     Invoke-NativeCommand -Command 'docker' -Arguments ($composeArguments + @('build'))
