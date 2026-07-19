@@ -58,6 +58,7 @@ function Read-EnvironmentFile {
 
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $composeFile = Join-Path $repositoryRoot 'compose.server.yml'
+$portCheckScript = Join-Path $PSScriptRoot 'Test-DockerPortBlock.ps1'
 $environmentPath = if ([IO.Path]::IsPathRooted($EnvironmentFile)) {
     $EnvironmentFile
 } else {
@@ -87,6 +88,8 @@ try {
     $settings = Read-EnvironmentFile -Path $environmentPath
     $required = @(
         'SERVER_HOST',
+        'SERVER_BIND_ADDRESS',
+        'PORT_BLOCK_START',
         'FRONTEND_PORT',
         'API_PORT',
         'FRONTEND_ORIGIN',
@@ -102,19 +105,57 @@ try {
         }
     }
 
-    foreach ($portName in @('FRONTEND_PORT', 'API_PORT')) {
+    foreach ($portName in @('PORT_BLOCK_START', 'FRONTEND_PORT', 'API_PORT')) {
         $port = 0
         if (-not [int]::TryParse($settings[$portName], [ref] $port) -or $port -lt 1 -or $port -gt 65535) {
             throw "'$portName' must be an integer from 1 through 65535."
         }
     }
 
+    $blockStart = [int] $settings['PORT_BLOCK_START']
+    $blockEnd = $blockStart + 9
+    foreach ($portName in @('FRONTEND_PORT', 'API_PORT')) {
+        $port = [int] $settings[$portName]
+        if ($port -lt $blockStart -or $port -gt $blockEnd) {
+            throw "'$portName' must be inside the reserved port block $blockStart-$blockEnd."
+        }
+    }
+
+    $bindAddress = $null
+    if (-not [ipaddress]::TryParse($settings['SERVER_BIND_ADDRESS'], [ref] $bindAddress)) {
+        throw "'SERVER_BIND_ADDRESS' must be an explicit IPv4 or IPv6 address."
+    }
+
+    $configuredUris = @{}
     foreach ($urlName in @('FRONTEND_ORIGIN', 'EXPO_PUBLIC_API_BASE_URL')) {
         $uri = $null
         if (-not [uri]::TryCreate($settings[$urlName], [UriKind]::Absolute, [ref] $uri) -or $uri.Scheme -ne 'http') {
             throw "'$urlName' must be an absolute HTTP URL for this local testing deployment."
         }
+        $configuredUris[$urlName] = $uri
     }
+
+    $serverHost = $settings['SERVER_HOST']
+    foreach ($urlName in $configuredUris.Keys) {
+        if ($configuredUris[$urlName].Host -ne $serverHost) {
+            throw "'$urlName' must use SERVER_HOST '$serverHost'."
+        }
+    }
+    if ($configuredUris['FRONTEND_ORIGIN'].Port -ne [int] $settings['FRONTEND_PORT']) {
+        throw "'FRONTEND_ORIGIN' must use FRONTEND_PORT $($settings['FRONTEND_PORT'])."
+    }
+    if ($configuredUris['EXPO_PUBLIC_API_BASE_URL'].Port -ne [int] $settings['API_PORT']) {
+        throw "'EXPO_PUBLIC_API_BASE_URL' must use API_PORT $($settings['API_PORT'])."
+    }
+    if ([ipaddress]::IsLoopback($bindAddress) -and $serverHost -notin @('localhost', '127.0.0.1', '::1')) {
+        throw "A loopback SERVER_BIND_ADDRESS requires SERVER_HOST=localhost, 127.0.0.1, or ::1. Use the trusted LAN IP as SERVER_BIND_ADDRESS for access from other machines."
+    }
+
+    Write-Host "Checking reserved host port block $blockStart-$blockEnd..." -ForegroundColor Cyan
+    & $portCheckScript `
+        -StartPort $blockStart `
+        -BlockSize 10 `
+        -ComposeProjectName 'bedtime-story-tracker'
 
     $env:DEPLOYMENT_VERSION = $gitSha
     $env:BUILD_DATE = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')

@@ -14,9 +14,10 @@ frontend and API ports, SQL Server host reachable from Docker, SQL authenticatio
 method, and whether an image registry exists. The deployment builds locally and
 does not require or use a registry.
 
-The committed files do not choose a server host. The default example ports are
-8080 for the frontend and 8081 for the API; change them if they conflict with
-another service or the server firewall policy.
+The committed files do not choose a server host. This application reserves host
+port block `12000-12009`: the frontend uses 12000, the API uses 12001, and the
+remaining ports stay reserved. See
+[`docker-host-port-policy.md`](docker-host-port-policy.md) before changing it.
 
 ## Configure the environment
 
@@ -29,14 +30,23 @@ Copy-Item .env.server.example .env.server
 Replace every placeholder in `.env.server`:
 
 - `SERVER_HOST`: hostname or IP address that client browsers can reach.
-- `FRONTEND_PORT` and `API_PORT`: free host ports.
+- `SERVER_BIND_ADDRESS`: `127.0.0.1` for host-only access or the explicit trusted
+  LAN IP when other machines must connect. Do not use `0.0.0.0` by default.
+- `PORT_BLOCK_START`: first port of the registered ten-port block; 12000 here.
+- `FRONTEND_PORT` and `API_PORT`: assigned ports inside the registered block.
 - `FRONTEND_ORIGIN`: exact browser origin, such as
-  `http://server-name:8080`; the API uses it as its single allowed CORS origin.
+  `http://server-name:12000`; the API uses it as its single allowed CORS origin.
 - `EXPO_PUBLIC_API_BASE_URL`: browser-visible API URL, such as
-  `http://server-name:8081`. Expo embeds this public value into the web bundle at
+  `http://server-name:12001`. Expo embeds this public value into the web bundle at
   image build time; changing it requires rebuilding the frontend image.
 - `ConnectionStrings__ApplicationDatabase`: container-compatible SQL Server
   connection string for the existing database.
+
+For host-only access, use `SERVER_HOST=localhost` with
+`SERVER_BIND_ADDRESS=127.0.0.1`. For access from other computers, use this
+machine's trusted LAN IP as `SERVER_BIND_ADDRESS` and the matching browser-visible
+hostname or IP as `SERVER_HOST`. The deployment script rejects inconsistent URL,
+host, port, and loopback combinations.
 
 Secrets stay in `.env.server`, which Git ignores. Never commit this file.
 
@@ -73,6 +83,10 @@ uses the current short Git SHA in both image tags and OCI revision labels, build
 both images, recreates the services, and waits up to 180 seconds for both health
 checks. Use `-EnvironmentFile` for another environment-file path or
 `-StartupTimeoutSeconds` for a different bounded wait.
+
+Before building, the script checks all ten registered ports for foreign Windows
+listeners and Windows-excluded TCP ranges. Ports already owned by this Compose
+project are allowed during upgrades.
 
 Expected URLs are:
 
