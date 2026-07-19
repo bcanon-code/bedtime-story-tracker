@@ -91,26 +91,27 @@ The same TypeScript check is also available as `npm run typecheck`. This reposit
 - [`index.ts`](index.ts) registers the Expo root component.
 - [`App.tsx`](App.tsx) coordinates the workflow and its local state. Conditional rendering selects the setup, reading, post-reading, or summary view.
 - [`src/components/CalmnessSelector.tsx`](src/components/CalmnessSelector.tsx) is a reusable controlled component with typed values, props, and change events.
-- [`src/data/stories.json`](src/data/stories.json) contains original mock stories; [`src/data/storyCatalog.ts`](src/data/storyCatalog.ts) defines their TypeScript shape and exposes the catalog. The API embeds the same JSON file for idempotent development seeding.
+- [`src/data/stories.json`](src/data/stories.json) contains the original fictional stories and remains the API's embedded development seed source; it is no longer a frontend runtime data source. [`src/data/storyCatalog.ts`](src/data/storyCatalog.ts) defines the frontend story model.
+- [`src/api/bedtimeApi.ts`](src/api/bedtimeApi.ts) uses `fetch` to load typed children, story summaries, and selected story detail. The API base URL defaults to `http://localhost:5076` and can be overridden with `EXPO_PUBLIC_API_BASE_URL`.
 - [`src/BedtimeStoryTracker.Api`](src/BedtimeStoryTracker.Api) contains the single ASP.NET Core API project, EF Core context and migrations, fictional seed data, and read-only child/story endpoints.
 - A `useEffect` in `App.tsx` owns the timer interval and cleanup for the reading step.
 - [`src/theme.ts`](src/theme.ts) centralizes low-light colors, spacing, and radius tokens.
 
-Session state remains in memory and flows down through props. Required-value completeness and calmness changes are derived from the current state rather than stored separately. The frontend is intentionally not connected to the API yet.
+Session state remains in memory and flows down through props. Required-value completeness and calmness changes are derived from the current state rather than stored separately. The API integration is read-only; completed sessions are not sent to the backend.
 
 ## Important design decisions
 
 - Local React state instead of Redux or Zustand keeps the small demo direct and reviewable.
 - Conditional rendering replaces a navigation dependency for this linear workflow.
-- Typed JSON provides realistic mock content while keeping data separate from the UI.
+- The local API is the frontend's single runtime source for fictional children and stories; the JSON catalog remains seed data only.
 - Persistent reading controls keep the timer and finish action available while story text scrolls.
 - The low-light, phone-focused interface supports the intended bedtime reading context.
 - Validation state and calmness changes are derived to avoid duplicated state.
-- Tier 1 intentionally has no backend or persistence.
+- Session workflow state intentionally remains frontend-only and in memory.
 
 ## Current limitations
 
-- No saved session history or frontend/API integration
+- No saved session history or write API integration
 - No authentication
 - No analytics or recommendations
 - No claim of medical or behavioral effectiveness

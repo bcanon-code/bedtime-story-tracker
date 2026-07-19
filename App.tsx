@@ -17,7 +17,12 @@ import {
   CalmnessValue,
 } from './src/components/CalmnessSelector';
 import { SessionSummaryCard } from './src/components/SessionSummaryCard';
-import { Story, storyCatalog } from './src/data/storyCatalog';
+import {
+  getChildren,
+  getStories,
+  getStoryById,
+} from './src/api/bedtimeApi';
+import type { Story, StorySummary } from './src/data/storyCatalog';
 import { formatElapsedTime } from './src/formatters';
 import { theme } from './src/theme';
 
@@ -29,17 +34,21 @@ interface Child {
 type CalmnessByChild = Partial<Record<Child['id'], CalmnessValue>>;
 type WorkflowStep = 'setup' | 'reading' | 'finished' | 'summary';
 
-const { stories } = storyCatalog;
-
-const children: Child[] = [
-  { id: 'avery', name: 'Avery' },
-  { id: 'jordan', name: 'Jordan' },
-];
-
 export default function App() {
+  const [children, setChildren] = useState<Child[]>([]);
+  const [stories, setStories] = useState<StorySummary[]>([]);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+  const [initialLoadError, setInitialLoadError] = useState<string | null>(null);
+  const [initialLoadAttempt, setInitialLoadAttempt] = useState(0);
   const [selectedStoryId, setSelectedStoryId] = useState<Story['id'] | null>(
     null,
   );
+  const [selectedStoryDetail, setSelectedStoryDetail] = useState<Story | null>(
+    null,
+  );
+  const [isStoryLoading, setIsStoryLoading] = useState(false);
+  const [storyLoadError, setStoryLoadError] = useState<string | null>(null);
+  const [storyLoadAttempt, setStoryLoadAttempt] = useState(0);
   const [calmnessByChild, setCalmnessByChild] =
     useState<CalmnessByChild>({});
   const [notesBefore, setNotesBefore] = useState('');
@@ -49,16 +58,98 @@ export default function App() {
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>('setup');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  const selectedStory = stories.find(
+  const selectedStorySummary = stories.find(
     (story) => story.id === selectedStoryId,
   );
+  const selectedStory =
+    selectedStoryDetail?.id === selectedStoryId ? selectedStoryDetail : null;
   const isPreReadingComplete =
-    calmnessByChild.avery !== undefined &&
-    calmnessByChild.jordan !== undefined;
+    children.length === 2 &&
+    children.every((child) => calmnessByChild[child.id] !== undefined);
   const isPostReadingComplete =
-    calmnessAfterByChild.avery !== undefined &&
-    calmnessAfterByChild.jordan !== undefined;
+    children.length === 2 &&
+    children.every((child) => calmnessAfterByChild[child.id] !== undefined);
   const isReading = workflowStep === 'reading';
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const loadBedtimeData = async () => {
+      setIsInitialLoading(true);
+      setInitialLoadError(null);
+
+      try {
+        const [loadedChildren, loadedStories] = await Promise.all([
+          getChildren(controller.signal),
+          getStories(controller.signal),
+        ]);
+
+        if (loadedChildren.length < 2) {
+          throw new Error(
+            'The bedtime API must return at least two fictional children.',
+          );
+        }
+
+        setChildren(loadedChildren.slice(0, 2));
+        setStories(loadedStories);
+      } catch (error: unknown) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setInitialLoadError(
+          error instanceof Error ? error.message : 'An unexpected error occurred.',
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsInitialLoading(false);
+        }
+      }
+    };
+
+    void loadBedtimeData();
+
+    return () => controller.abort();
+  }, [initialLoadAttempt]);
+
+  useEffect(() => {
+    if (!selectedStoryId) {
+      setSelectedStoryDetail(null);
+      setStoryLoadError(null);
+      setIsStoryLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    const loadStory = async () => {
+      setSelectedStoryDetail(null);
+      setStoryLoadError(null);
+      setIsStoryLoading(true);
+
+      try {
+        setSelectedStoryDetail(
+          await getStoryById(selectedStoryId, controller.signal),
+        );
+      } catch (error: unknown) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setStoryLoadError(
+          error instanceof Error ? error.message : 'An unexpected error occurred.',
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsStoryLoading(false);
+        }
+      }
+    };
+
+    void loadStory();
+
+    return () => controller.abort();
+  }, [selectedStoryId, storyLoadAttempt]);
 
   useEffect(() => {
     if (!isReading) {
@@ -74,6 +165,7 @@ export default function App() {
 
   const selectStory = (storyId: Story['id']) => {
     setSelectedStoryId(storyId);
+    setStoryLoadAttempt(0);
   };
 
   const setChildCalmness = (
@@ -127,10 +219,45 @@ export default function App() {
     setNotesAfter('');
   };
 
+  const retryInitialLoad = () => {
+    setInitialLoadAttempt((current) => current + 1);
+  };
+
+  const retryStoryLoad = () => {
+    setStoryLoadAttempt((current) => current + 1);
+  };
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.screen}>
-        {workflowStep === 'summary' && selectedStory ? (
+        {isInitialLoading ? (
+          <View accessibilityLiveRegion="polite" style={styles.centeredState}>
+            <Text style={styles.stateTitle}>Loading bedtime data…</Text>
+          </View>
+        ) : initialLoadError ? (
+          <View style={styles.centeredState}>
+            <View style={styles.stateCard}>
+              <Text accessibilityRole="header" style={styles.stateTitle}>
+                The local API could not be reached
+              </Text>
+              <Text style={styles.stateMessage}>{initialLoadError}</Text>
+              <Text style={styles.stateHint}>
+                Verify the local demo launcher and API, then try again.
+              </Text>
+              <Pressable
+                accessibilityLabel="Retry loading bedtime data"
+                accessibilityRole="button"
+                onPress={retryInitialLoad}
+                style={({ pressed }) => [
+                  styles.retryButton,
+                  pressed && styles.pressedPrimaryButton,
+                ]}
+              >
+                <Text style={styles.primaryButtonText}>Retry</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : workflowStep === 'summary' && selectedStory ? (
           <ScrollView contentContainerStyle={styles.page}>
             <SessionSummaryCard
               children={children.map((child) => ({
@@ -353,25 +480,53 @@ export default function App() {
                   })}
                 </View>
 
-                {selectedStory ? (
+                {selectedStorySummary ? (
                   <>
                     <View style={styles.selectionSummary}>
                       <Text style={styles.summaryLabel}>Selected story</Text>
-                      <Text style={styles.summaryValue}>{selectedStory.title}</Text>
+                      <Text style={styles.summaryValue}>
+                        {selectedStorySummary.title}
+                      </Text>
                       <Text style={styles.summaryDescription}>
-                        {selectedStory.summary}
+                        {selectedStorySummary.summary}
                       </Text>
                     </View>
-                    <Pressable
-                      accessibilityRole="button"
-                      onPress={beginReading}
-                      style={({ pressed }) => [
-                        styles.beginButton,
-                        pressed && styles.pressedPrimaryButton,
-                      ]}
-                    >
-                      <Text style={styles.primaryButtonText}>Begin reading</Text>
-                    </Pressable>
+                    {isStoryLoading ? (
+                      <Text
+                        accessibilityLiveRegion="polite"
+                        style={styles.storyStatus}
+                      >
+                        Loading story…
+                      </Text>
+                    ) : storyLoadError ? (
+                      <View style={styles.storyError}>
+                        <Text style={styles.validationMessage}>
+                          {storyLoadError}
+                        </Text>
+                        <Pressable
+                          accessibilityLabel="Retry loading selected story"
+                          accessibilityRole="button"
+                          onPress={retryStoryLoad}
+                          style={({ pressed }) => [
+                            styles.retryButton,
+                            pressed && styles.pressedPrimaryButton,
+                          ]}
+                        >
+                          <Text style={styles.primaryButtonText}>Retry story</Text>
+                        </Pressable>
+                      </View>
+                    ) : selectedStory ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={beginReading}
+                        style={({ pressed }) => [
+                          styles.beginButton,
+                          pressed && styles.pressedPrimaryButton,
+                        ]}
+                      >
+                        <Text style={styles.primaryButtonText}>Begin reading</Text>
+                      </Pressable>
+                    ) : null}
                   </>
                 ) : (
                   <Text style={styles.prompt}>Select a story to continue.</Text>
@@ -400,6 +555,57 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: theme.colors.background,
     flex: 1,
+  },
+  centeredState: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    padding: theme.spacing.lg,
+  },
+  stateCard: {
+    backgroundColor: theme.colors.surface,
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    maxWidth: 520,
+    padding: theme.spacing.xl,
+    width: '100%',
+  },
+  stateTitle: {
+    color: theme.colors.textPrimary,
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  stateMessage: {
+    color: theme.colors.error,
+    lineHeight: 22,
+    marginTop: theme.spacing.md,
+    textAlign: 'center',
+  },
+  stateHint: {
+    color: theme.colors.textSecondary,
+    lineHeight: 22,
+    marginTop: theme.spacing.sm,
+    textAlign: 'center',
+  },
+  retryButton: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.md,
+    justifyContent: 'center',
+    marginTop: theme.spacing.lg,
+    minHeight: 48,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  storyStatus: {
+    color: theme.colors.textSecondary,
+    marginTop: theme.spacing.lg,
+    textAlign: 'center',
+  },
+  storyError: {
+    alignItems: 'center',
   },
   page: {
     alignItems: 'center',

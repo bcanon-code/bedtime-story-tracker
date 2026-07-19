@@ -9,6 +9,8 @@ export interface Story {
   paragraphs: string[];
 }
 
+export type StorySummary = Omit<Story, 'paragraphs'>;
+
 interface StoryCatalog {
   schemaVersion: number;
   storyFilters: string[];
