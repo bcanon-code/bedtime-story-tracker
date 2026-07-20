@@ -3,172 +3,195 @@
 [CmdletBinding()]
 param(
     [Parameter()]
-    [string] $EnvironmentFile = '.env.server',
+    [switch] $Force,
 
     [Parameter()]
-    [string] $SqlToolsImage = 'mcr.microsoft.com/mssql-tools:latest'
+    [switch] $SkipSeedVerification
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function ConvertTo-SqlIdentifier {
-    param([Parameter(Mandatory)][string] $Value)
-    return '[' + $Value.Replace(']', ']]') + ']'
-}
-
-function ConvertTo-SqlStringLiteral {
-    param([Parameter(Mandatory)][string] $Value)
-    return "N'" + $Value.Replace("'", "''") + "'"
-}
-
-function Get-EnvironmentValue {
+function Invoke-CheckedCommand {
+    [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][string] $Path,
-        [Parameter(Mandatory)][string] $Name
+        [Parameter(Mandatory)]
+        [string] $Description,
+
+        [Parameter(Mandatory)]
+        [scriptblock] $Command
     )
 
-    $line = Get-Content -LiteralPath $Path |
-        Where-Object { $_ -match "^\s*$([regex]::Escape($Name))\s*=" } |
-        Select-Object -First 1
-    if (-not $line) {
-        throw "$Name was not found in $Path."
+    Write-Host $Description -ForegroundColor Cyan
+    & $Command
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Description failed with exit code $LASTEXITCODE."
     }
-
-    return $line.Substring($line.IndexOf('=') + 1).Trim()
 }
 
-function Invoke-DockerSql {
+function Test-TcpPortInUse {
+    [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][string] $Sql,
-        [Parameter(Mandatory)][System.Data.SqlClient.SqlConnectionStringBuilder] $Connection,
-        [Parameter(Mandatory)][string] $Database
+        [Parameter(Mandatory)]
+        [int] $Port
     )
 
-    $previousPassword = $env:SQLCMDPASSWORD
+    $listener = [System.Net.Sockets.TcpListener]::new(
+        [System.Net.IPAddress]::Loopback,
+        $Port)
     try {
-        $env:SQLCMDPASSWORD = $Connection.Password
-        $Sql | & docker run --rm -i `
-            -e SQLCMDPASSWORD `
-            $SqlToolsImage `
-            /opt/mssql-tools/bin/sqlcmd `
-            -S $Connection.DataSource `
-            -U $Connection.UserID `
-            -C `
-            -x `
-            -b `
-            -d $Database
-        if ($LASTEXITCODE -ne 0) {
-            throw "Containerized SQL command failed with exit code $LASTEXITCODE."
-        }
+        $listener.Start()
+        return $false
+    }
+    catch [System.Net.Sockets.SocketException] {
+        return $true
     }
     finally {
-        $env:SQLCMDPASSWORD = $previousPassword
+        $listener.Stop()
     }
 }
 
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $apiProject = Join-Path $repositoryRoot 'src\BedtimeStoryTracker.Api\BedtimeStoryTracker.Api.csproj'
-$environmentPath = if ([IO.Path]::IsPathRooted($EnvironmentFile)) {
-    $EnvironmentFile
-} else {
-    Join-Path $repositoryRoot $EnvironmentFile
-}
+$developmentSettings = Join-Path $repositoryRoot 'src\BedtimeStoryTracker.Api\appsettings.Development.json'
+$contextName = 'ApplicationDbContext'
+$expectedDatabase = 'BedtimeStoryTrackerDemo'
+$seedVerificationPort = 5077
 
 if (-not (Test-Path -LiteralPath $apiProject -PathType Leaf)) {
     throw "API project was not found: $apiProject"
 }
-if (-not (Test-Path -LiteralPath $environmentPath -PathType Leaf)) {
-    throw "Environment file was not found: $environmentPath"
+if (-not (Test-Path -LiteralPath $developmentSettings -PathType Leaf)) {
+    throw "Development settings were not found: $developmentSettings"
 }
-if (-not (Get-Command -Name 'docker' -ErrorAction SilentlyContinue)) {
-    throw "Required command 'docker' was not found on PATH."
-}
-
-$applicationBuilder = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
-$applicationBuilder.set_ConnectionString(
-    (Get-EnvironmentValue -Path $environmentPath -Name 'ConnectionStrings__ApplicationDatabase'))
-$adminBuilder = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
-$adminBuilder.set_ConnectionString(
-    (Get-EnvironmentValue -Path $environmentPath -Name 'ResetDatabase__AdminConnectionString'))
-
-$databaseName = $applicationBuilder.InitialCatalog
-$applicationLogin = $applicationBuilder.UserID
-$applicationPassword = $applicationBuilder.Password
-
-if ($databaseName -ne 'BedtimeStoryTrackerDemo') {
-    throw 'Refusing to reset: the secret connection string must target BedtimeStoryTrackerDemo.'
-}
-if ([string]::IsNullOrWhiteSpace($applicationLogin) -or
-    [string]::IsNullOrWhiteSpace($applicationPassword)) {
-    throw 'The secret connection string must contain User ID and Password values.'
-}
-if ([string]::IsNullOrWhiteSpace($applicationBuilder.DataSource)) {
-    throw 'The environment connection string must contain Server or Data Source.'
-}
-if ([string]::IsNullOrWhiteSpace($adminBuilder.DataSource) -or
-    [string]::IsNullOrWhiteSpace($adminBuilder.UserID) -or
-    [string]::IsNullOrWhiteSpace($adminBuilder.Password)) {
-    throw 'ResetDatabase__AdminConnectionString must contain Server, User ID, and Password.'
+if (-not (Get-Command -Name 'dotnet' -ErrorAction SilentlyContinue)) {
+    throw "Required command 'dotnet' was not found on PATH."
 }
 
-$databaseIdentifier = ConvertTo-SqlIdentifier -Value $databaseName
-$databaseLiteral = ConvertTo-SqlStringLiteral -Value $databaseName
-$loginIdentifier = ConvertTo-SqlIdentifier -Value $applicationLogin
-$loginLiteral = ConvertTo-SqlStringLiteral -Value $applicationLogin
-$passwordLiteral = ConvertTo-SqlStringLiteral -Value $applicationPassword
+$efVersionOutput = & dotnet ef --version 2>&1
+if ($LASTEXITCODE -ne 0) {
+    throw "Required command 'dotnet ef' is unavailable. Install or restore the EF Core CLI tools, then try again."
+}
 
-$resetSql = @"
-USE [master];
-IF DB_ID($databaseLiteral) IS NOT NULL
-BEGIN
-    ALTER DATABASE $databaseIdentifier SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-    DROP DATABASE $databaseIdentifier;
-END;
+$settings = Get-Content -Raw -LiteralPath $developmentSettings | ConvertFrom-Json
+$connectionString = $settings.ConnectionStrings.ApplicationDatabase
+if ([string]::IsNullOrWhiteSpace($connectionString)) {
+    throw "Connection string 'ApplicationDatabase' was not found in $developmentSettings."
+}
 
-IF SUSER_ID($loginLiteral) IS NULL
-    CREATE LOGIN $loginIdentifier WITH PASSWORD = $passwordLiteral;
-ELSE
-BEGIN
-    ALTER LOGIN $loginIdentifier ENABLE;
-    ALTER LOGIN $loginIdentifier WITH PASSWORD = $passwordLiteral;
-END;
+$connection = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
+$connection.set_ConnectionString($connectionString)
+$databaseName = $connection.InitialCatalog
+$serverName = $connection.DataSource
 
-CREATE DATABASE $databaseIdentifier;
-GO
+if ($databaseName -cne $expectedDatabase) {
+    throw "Refusing to reset: the Development connection string must target exactly '$expectedDatabase', but targets '$databaseName'."
+}
+if ([string]::IsNullOrWhiteSpace($serverName)) {
+    throw 'Refusing to reset: the Development connection string does not specify a SQL Server instance.'
+}
 
-USE $databaseIdentifier;
-CREATE USER $loginIdentifier FOR LOGIN $loginIdentifier;
-ALTER ROLE [db_owner] ADD MEMBER $loginIdentifier;
-GRANT CONNECT TO $loginIdentifier;
-GO
-"@
+Write-Host 'Local development database reset target:' -ForegroundColor Yellow
+Write-Host "  Server:   $serverName"
+Write-Host "  Database: $databaseName"
+Write-Host "  Settings: $developmentSettings"
 
-Write-Host "Recreating only $databaseName on $($adminBuilder.DataSource)..." -ForegroundColor Cyan
-Write-Host "Provisioning application login '$applicationLogin' from the ignored environment file..." -ForegroundColor Cyan
-Invoke-DockerSql -Sql $resetSql -Connection $adminBuilder -Database 'master'
+if (-not $Force) {
+    $confirmation = Read-Host "Type $expectedDatabase to confirm that its data may be permanently deleted"
+    if ($confirmation -cne $expectedDatabase) {
+        throw 'Database reset cancelled. The confirmation did not exactly match the database name.'
+    }
+}
 
-$migrationScript = [IO.Path]::GetTempFileName()
+$previousAspNetCoreEnvironment = $env:ASPNETCORE_ENVIRONMENT
+$previousDotNetEnvironment = $env:DOTNET_ENVIRONMENT
+$previousConnectionString = $env:ConnectionStrings__ApplicationDatabase
+$seedProcess = $null
+
 try {
-    Write-Host 'Generating the idempotent EF Core migration script...' -ForegroundColor Cyan
-    & dotnet ef migrations script `
-        --idempotent `
-        --output $migrationScript `
-        --project $apiProject `
-        --startup-project $apiProject
-    if ($LASTEXITCODE -ne 0) {
-        throw "Migration script generation failed with exit code $LASTEXITCODE."
+    $env:ASPNETCORE_ENVIRONMENT = 'Development'
+    $env:DOTNET_ENVIRONMENT = 'Development'
+    $env:ConnectionStrings__ApplicationDatabase = $connectionString
+
+    Invoke-CheckedCommand -Description "Dropping only $expectedDatabase..." -Command {
+        & dotnet ef database drop --force `
+            --project $apiProject `
+            --startup-project $apiProject `
+            --context $contextName `
+            --no-build
     }
 
-    Write-Host 'Applying EF Core migrations with the reset administrator...' -ForegroundColor Cyan
-    Invoke-DockerSql `
-        -Sql (Get-Content -Raw -LiteralPath $migrationScript) `
-        -Connection $adminBuilder `
-        -Database $databaseName
+    Invoke-CheckedCommand -Description 'Recreating the database from the current EF Core migrations...' -Command {
+        & dotnet ef database update `
+            --project $apiProject `
+            --startup-project $apiProject `
+            --context $contextName `
+            --no-build
+    }
+
+    if ($SkipSeedVerification) {
+        Write-Warning 'Seed verification was skipped. Start the API in Development to run the existing development seeder.'
+    }
+    else {
+        if (Test-TcpPortInUse -Port $seedVerificationPort) {
+            throw "Seed verification port $seedVerificationPort is already in use. Stop the process using it, or rerun with -SkipSeedVerification and start the API manually."
+        }
+
+        $apiOutputDirectory = Join-Path (Split-Path -Parent $apiProject) 'bin\Debug\net10.0'
+        $apiAssembly = Join-Path $apiOutputDirectory 'BedtimeStoryTracker.Api.dll'
+        if (-not (Test-Path -LiteralPath $apiAssembly -PathType Leaf)) {
+            throw "Built API assembly was not found: $apiAssembly"
+        }
+
+        Write-Host 'Starting the API briefly to run and verify the existing Development seeder...' -ForegroundColor Cyan
+        $seedProcess = Start-Process -FilePath 'dotnet' `
+            -ArgumentList @($apiAssembly, '--urls', "http://127.0.0.1:$seedVerificationPort") `
+            -WorkingDirectory $apiOutputDirectory `
+            -WindowStyle Hidden `
+            -PassThru
+
+        $deadline = (Get-Date).AddSeconds(60)
+        $children = $null
+        $stories = $null
+        while ((Get-Date) -lt $deadline) {
+            if ($seedProcess.HasExited) {
+                throw "The API exited during seed verification with exit code $($seedProcess.ExitCode)."
+            }
+
+            try {
+                $children = Invoke-RestMethod -Uri "http://127.0.0.1:$seedVerificationPort/api/children" -TimeoutSec 5
+                $stories = Invoke-RestMethod -Uri "http://127.0.0.1:$seedVerificationPort/api/stories" -TimeoutSec 5
+                break
+            }
+            catch {
+                Start-Sleep -Seconds 1
+            }
+        }
+
+        if ($null -eq $children -or @($children).Count -eq 0) {
+            throw 'Seed verification failed: GET /api/children returned no children.'
+        }
+        if ($null -eq $stories -or @($stories).Count -eq 0) {
+            throw 'Seed verification failed: GET /api/stories returned no stories.'
+        }
+
+        Write-Host "Seed verification passed: $(@($children).Count) children and $(@($stories).Count) stories." -ForegroundColor Green
+    }
+}
+catch {
+    throw "Database reset failed for $expectedDatabase. If the drop reports active connections, stop the local API and any Docker API container using this database, then try again. $($_.Exception.Message)"
 }
 finally {
-    Remove-Item -LiteralPath $migrationScript -Force -ErrorAction SilentlyContinue
+    if ($null -ne $seedProcess -and -not $seedProcess.HasExited) {
+        Stop-Process -Id $seedProcess.Id -Force -ErrorAction SilentlyContinue
+        $seedProcess.WaitForExit(5000) | Out-Null
+    }
+
+    $env:ASPNETCORE_ENVIRONMENT = $previousAspNetCoreEnvironment
+    $env:DOTNET_ENVIRONMENT = $previousDotNetEnvironment
+    $env:ConnectionStrings__ApplicationDatabase = $previousConnectionString
 }
 
-Write-Host 'Database reset, login provisioning, and migrations completed.' -ForegroundColor Green
-Write-Host 'Start the API to run development seed data.'
+Write-Host 'Database reset completed successfully.' -ForegroundColor Green
+Write-Host "Only $expectedDatabase on $serverName was dropped and recreated."
+Write-Host 'Next: run .\scripts\Start-LocalDemo.ps1 for the normal local workflow.'
