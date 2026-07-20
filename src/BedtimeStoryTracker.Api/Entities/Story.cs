@@ -2,7 +2,7 @@ namespace BedtimeStoryTracker.Api.Entities;
 
 public sealed class Story
 {
-    public required string Id { get; set; }
+    public int Id { get; set; }
 
     public required string Title { get; set; }
 
@@ -19,9 +19,9 @@ public sealed class Story
 
 public sealed class StoryParagraph
 {
-    public required string Id { get; set; }
+    public int Id { get; set; }
 
-    public required string StoryId { get; set; }
+    public int StoryId { get; set; }
 
     public int Sequence { get; set; }
 

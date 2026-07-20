@@ -1,7 +1,5 @@
-import catalogJson from './stories.json';
-
 export interface Story {
-  id: string;
+  id: number;
   title: string;
   theme: string;
   summary: string;
@@ -10,11 +8,3 @@ export interface Story {
 }
 
 export type StorySummary = Omit<Story, 'paragraphs'>;
-
-interface StoryCatalog {
-  schemaVersion: number;
-  storyFilters: string[];
-  stories: Story[];
-}
-
-export const storyCatalog = catalogJson as StoryCatalog;

@@ -14,7 +14,7 @@ import { theme } from '../theme';
 import { CalmnessValue } from './CalmnessSelector';
 
 export interface ChildSessionSummary {
-  id: string;
+  id: number;
   name: string;
   beforeCalmness: CalmnessValue;
   afterCalmness: CalmnessValue;

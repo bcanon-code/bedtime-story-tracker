@@ -1,10 +1,10 @@
 export interface ChildDto {
-  id: string;
+  id: number;
   name: string;
 }
 
 export interface StorySummaryDto {
-  id: string;
+  id: number;
   title: string;
   theme: string;
   summary: string;
@@ -16,12 +16,12 @@ export interface StoryDetailDto extends StorySummaryDto {
 }
 
 export interface CreateReadingSessionRequest {
-  storyId: string;
+  storyId: number;
   elapsedSeconds: number;
   beforeNotes?: string;
   afterNotes?: string;
   childObservations: {
-    childId: string;
+    childId: number;
     beforeCalmness: number;
     afterCalmness: number;
   }[];

@@ -26,4 +26,4 @@ public sealed class ChildrenController(ApplicationDbContext dbContext) : Control
     }
 }
 
-public sealed record ChildDto(string Id, string Name);
+public sealed record ChildDto(int Id, string Name);

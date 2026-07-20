@@ -36,7 +36,7 @@ public sealed class StoriesController(ApplicationDbContext dbContext) : Controll
     [ProducesResponseType<StoryDetailDto>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<StoryDetailDto>> GetById(
-        string id,
+        int id,
         CancellationToken cancellationToken)
     {
         var story = await dbContext.Stories
@@ -59,14 +59,14 @@ public sealed class StoriesController(ApplicationDbContext dbContext) : Controll
 }
 
 public sealed record StorySummaryDto(
-    string Id,
+    int Id,
     string Title,
     string Theme,
     string Summary,
     int ReadingMinutes);
 
 public sealed record StoryDetailDto(
-    string Id,
+    int Id,
     string Title,
     string Theme,
     string Summary,

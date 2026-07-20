@@ -27,7 +27,7 @@ public sealed class ReadingSessionsController(ApplicationDbContext dbContext) : 
         }
 
         var duplicateChildIds = request.ChildObservations
-            .GroupBy(observation => observation.ChildId, StringComparer.Ordinal)
+            .GroupBy(observation => observation.ChildId)
             .Where(group => group.Count() > 1)
             .Select(group => group.Key)
             .ToArray();
@@ -69,7 +69,7 @@ public sealed class ReadingSessionsController(ApplicationDbContext dbContext) : 
                 detail: $"No child exists with ID: {string.Join(", ", unknownChildIds)}.");
         }
 
-        var completedAtUtc = DateTimeOffset.UtcNow;
+        var completedAtUtc = DateTime.UtcNow;
         var session = new ReadingSession
         {
             StoryId = story.Id,
@@ -106,19 +106,19 @@ public sealed class ReadingSessionsController(ApplicationDbContext dbContext) : 
 }
 
 public sealed record CreateReadingSessionRequest(
-    [Required, StringLength(100)] string StoryId,
+    int StoryId,
     [Range(1, 86400)] int ElapsedSeconds,
     [StringLength(2000)] string? BeforeNotes,
     [StringLength(2000)] string? AfterNotes,
     [Required] IReadOnlyList<CreateChildObservationRequest> ChildObservations);
 
 public sealed record CreateChildObservationRequest(
-    [Required, StringLength(100)] string ChildId,
+    int ChildId,
     [Range(1, 5)] int BeforeCalmness,
     [Range(1, 5)] int AfterCalmness);
 
 public sealed record CreateReadingSessionResponse(
     int SessionId,
-    DateTimeOffset SavedAtUtc,
+    DateTime SavedAtUtc,
     string StoryTitle,
     int ElapsedSeconds);

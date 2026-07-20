@@ -16,12 +16,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const hasString = (value: Record<string, unknown>, key: string) =>
   typeof value[key] === 'string';
 
+const hasNumber = (value: Record<string, unknown>, key: string) =>
+  typeof value[key] === 'number';
+
 const isChildDto = (value: unknown): value is ChildDto =>
-  isRecord(value) && hasString(value, 'id') && hasString(value, 'name');
+  isRecord(value) && hasNumber(value, 'id') && hasString(value, 'name');
 
 const isStorySummaryDto = (value: unknown): value is StorySummaryDto =>
   isRecord(value) &&
-  hasString(value, 'id') &&
+  hasNumber(value, 'id') &&
   hasString(value, 'title') &&
   hasString(value, 'theme') &&
   hasString(value, 'summary') &&
@@ -152,7 +155,7 @@ export async function getStories(
 }
 
 export async function getStoryById(
-  id: string,
+  id: number,
   signal?: AbortSignal,
 ): Promise<StoryDetailDto> {
   const data = await requestJson(`/api/stories/${encodeURIComponent(id)}`, signal);

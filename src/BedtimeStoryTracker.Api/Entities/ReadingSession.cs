@@ -4,13 +4,13 @@ public sealed class ReadingSession
 {
     public int Id { get; set; }
 
-    public required string StoryId { get; set; }
+    public int StoryId { get; set; }
 
     public required string StoryTitleSnapshot { get; set; }
 
-    public DateTimeOffset StartedAtUtc { get; set; }
+    public DateTime StartedAtUtc { get; set; }
 
-    public DateTimeOffset CompletedAtUtc { get; set; }
+    public DateTime CompletedAtUtc { get; set; }
 
     public int ElapsedSeconds { get; set; }
 
@@ -29,7 +29,7 @@ public sealed class ReadingSessionChildObservation
 
     public int ReadingSessionId { get; set; }
 
-    public required string ChildId { get; set; }
+    public int ChildId { get; set; }
 
     public required string ChildNameSnapshot { get; set; }
 

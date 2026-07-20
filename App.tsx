@@ -28,7 +28,7 @@ import { formatElapsedTime } from './src/formatters';
 import { theme } from './src/theme';
 
 interface Child {
-  id: string;
+  id: number;
   name: string;
 }
 
