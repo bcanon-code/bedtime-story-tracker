@@ -25,6 +25,7 @@ import {
 } from './src/api/bedtimeApi';
 import type { Story, StorySummary } from './src/data/storyCatalog';
 import { formatElapsedTime } from './src/formatters';
+import { buildInfo } from './src/config/buildInfo';
 import { theme } from './src/theme';
 
 interface Child {
@@ -584,6 +585,12 @@ export default function App() {
                 </Text>
               </View>
             )}
+            <Text
+              accessibilityLabel={buildInfo.detailedDisplay}
+              style={styles.versionText}
+            >
+              {buildInfo.compactDisplay}
+            </Text>
             </View>
           </ScrollView>
         )}
@@ -954,5 +961,11 @@ const styles = StyleSheet.create({
     minHeight: 104,
     padding: theme.spacing.md,
     textAlignVertical: 'top',
+  },
+  versionText: {
+    color: theme.colors.textSecondary,
+    fontSize: 12,
+    marginTop: theme.spacing.xl,
+    textAlign: 'center',
   },
 });

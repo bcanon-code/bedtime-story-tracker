@@ -4,7 +4,14 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <Version Condition="'$(AppVersion)' != ''">$(AppVersion)</Version>
+    <FileVersion Condition="'$(AppVersion)' != '' and '$(BuildNumber)' != ''">$(AppVersion).$(BuildNumber)</FileVersion>
+    <InformationalVersion Condition="'$(AppVersion)' != '' and '$(BuildNumber)' != '' and '$(GitSha)' != ''">$(AppVersion)+build.$(BuildNumber).sha.$(GitSha)</InformationalVersion>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\version.json" Link="version.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.6" />

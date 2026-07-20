@@ -77,11 +77,11 @@ Run:
 .\scripts\Deploy-Server.ps1
 ```
 
-The script refuses a dirty Git working tree unless
-`-AllowDirtyWorkingTree` is supplied intentionally. It validates configuration,
-uses the current short Git SHA in both image tags and OCI revision labels, builds
-both images, recreates the services, and waits up to 180 seconds for both health
-checks. Use `-EnvironmentFile` for another environment-file path or
+The script refuses a dirty Git working tree. It validates `version.json` and the
+server configuration, uses the version/build/SHA identity in both image tags,
+applies OCI labels, and gives both builds one UTC timestamp. It recreates the
+services, waits up to 180 seconds for health, then fails if `/version` differs from
+the expected identity. Use `-EnvironmentFile` for another environment-file path or
 `-StartupTimeoutSeconds` for a different bounded wait.
 
 Before building, the script checks all ten registered ports for foreign Windows
@@ -101,11 +101,16 @@ expose them or this unauthenticated API to an untrusted network.
 
 ## Operate and troubleshoot
 
-Run these commands from the repository root. Export the currently deployed SHA
+Run these commands from the repository root. Export the complete deployed identity
 when calling Compose directly:
 
 ```powershell
-$env:DEPLOYMENT_VERSION = git rev-parse --short HEAD
+$version = Get-Content -Raw version.json | ConvertFrom-Json
+$env:APP_VERSION = $version.version
+$env:BUILD_NUMBER = [string] $version.build
+$env:GIT_SHA = git rev-parse --short HEAD
+$env:IMAGE_TAG = "$($version.version)-build.$($version.build.ToString('000'))-$env:GIT_SHA"
+$env:BUILD_DATE = '<original-UTC-build-timestamp>'
 docker compose --env-file .env.server -f compose.server.yml ps
 docker compose --env-file .env.server -f compose.server.yml logs --tail 200 api
 docker compose --env-file .env.server -f compose.server.yml logs --tail 200 frontend
@@ -140,16 +145,20 @@ To upgrade, update the repository to the intended clean Git revision, review
 the script and inspect image metadata if needed:
 
 ```powershell
-docker image inspect bedtime-story-tracker-web:<git-sha> --format '{{json .Config.Labels}}'
-docker image inspect bedtime-story-tracker-api:<git-sha> --format '{{json .Config.Labels}}'
+docker image inspect bedtime-story-tracker-web:<version-build-sha> --format '{{json .Config.Labels}}'
+docker image inspect bedtime-story-tracker-api:<version-build-sha> --format '{{json .Config.Labels}}'
 ```
 
 Previous versioned images are not pruned. For a manual rollback, first confirm both
-previous images exist, then select their shared short SHA and recreate without a
-build:
+previous images exist, then select their shared version/build/SHA and recreate
+without a build:
 
 ```powershell
-$env:DEPLOYMENT_VERSION = '<previous-git-sha>'
+$env:APP_VERSION = '<previous-version>'
+$env:BUILD_NUMBER = '<previous-build-number>'
+$env:GIT_SHA = '<previous-git-sha>'
+$env:IMAGE_TAG = '<previous-version>-build.<zero-padded-build>-<previous-git-sha>'
+$env:BUILD_DATE = '<previous-UTC-build-timestamp>'
 docker compose --env-file .env.server -f compose.server.yml up -d --no-build --force-recreate
 docker compose --env-file .env.server -f compose.server.yml ps
 ```

@@ -1,5 +1,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 
+ARG APP_VERSION
+ARG BUILD_NUMBER
+ARG GIT_SHA
+
 WORKDIR /src
 
 COPY src/BedtimeStoryTracker.Api/BedtimeStoryTracker.Api.csproj src/BedtimeStoryTracker.Api/
@@ -7,20 +11,28 @@ RUN dotnet restore src/BedtimeStoryTracker.Api/BedtimeStoryTracker.Api.csproj
 
 COPY src/BedtimeStoryTracker.Api/ src/BedtimeStoryTracker.Api/
 COPY src/data/stories.json src/data/stories.json
+COPY version.json version.json
 RUN dotnet publish src/BedtimeStoryTracker.Api/BedtimeStoryTracker.Api.csproj \
     --configuration Release \
     --no-restore \
     --output /app/publish \
-    /p:UseAppHost=false
+    /p:UseAppHost=false \
+    /p:AppVersion=${APP_VERSION} \
+    /p:BuildNumber=${BUILD_NUMBER} \
+    /p:GitSha=${GIT_SHA}
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble AS runtime
 
 ARG GIT_SHA=unknown
 ARG BUILD_DATE=unknown
+ARG APP_VERSION=unknown
+ARG OCI_SOURCE=unknown
 
 LABEL org.opencontainers.image.title="Bedtime Story Tracker API" \
+      org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.revision="${GIT_SHA}" \
-      org.opencontainers.image.created="${BUILD_DATE}"
+      org.opencontainers.image.created="${BUILD_DATE}" \
+      org.opencontainers.image.source="${OCI_SOURCE}"
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends curl \

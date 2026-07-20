@@ -65,6 +65,8 @@ To launch the API and Expo Web together and open the frontend and Scalar in Chro
 
 For a versioned Docker deployment on a trusted local testing server, see
 [`docs/server-deployment.md`](docs/server-deployment.md).
+The shared release identity and explicit bump workflow are documented in
+[`docs/versioning.md`](docs/versioning.md).
 The shared host-port allocation convention is documented in
 [`docs/docker-host-port-policy.md`](docs/docker-host-port-policy.md).
 

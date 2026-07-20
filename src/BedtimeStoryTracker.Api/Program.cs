@@ -1,4 +1,5 @@
 using BedtimeStoryTracker.Api.Data;
+using BedtimeStoryTracker.Api;
 using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
@@ -8,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+builder.Services.AddSingleton(BuildMetadata.Create(builder.Configuration));
 var applicationDatabase = builder.Configuration.GetConnectionString("ApplicationDatabase")
     ?? throw new InvalidOperationException(
         "Connection string 'ApplicationDatabase' is required.");

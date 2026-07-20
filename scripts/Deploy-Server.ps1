@@ -7,10 +7,7 @@ param(
 
     [Parameter()]
     [ValidateRange(30, 1800)]
-    [int] $StartupTimeoutSeconds = 180,
-
-    [Parameter()]
-    [switch] $AllowDirtyWorkingTree
+    [int] $StartupTimeoutSeconds = 180
 )
 
 Set-StrictMode -Version Latest
@@ -58,6 +55,7 @@ function Read-EnvironmentFile {
 
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $composeFile = Join-Path $repositoryRoot 'compose.server.yml'
+$versionFile = Join-Path $repositoryRoot 'version.json'
 $portCheckScript = Join-Path $PSScriptRoot 'Test-DockerPortBlock.ps1'
 $environmentPath = if ([IO.Path]::IsPathRooted($EnvironmentFile)) {
     $EnvironmentFile
@@ -74,12 +72,28 @@ try {
 
     $workingTree = (& git status --porcelain)
     if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect the Git working tree.' }
-    if ($workingTree -and -not $AllowDirtyWorkingTree) {
-        throw 'The Git working tree is dirty. Commit/stash changes or rerun with -AllowDirtyWorkingTree.'
+    if ($workingTree) {
+        throw 'The Git working tree is dirty. Commit or stash changes before deployment.'
     }
 
     $gitSha = (& git rev-parse --short HEAD).Trim()
     if ($LASTEXITCODE -ne 0 -or -not $gitSha) { throw 'Unable to determine the current Git SHA.' }
+
+    $versionData = Get-Content -Raw -LiteralPath $versionFile | ConvertFrom-Json
+    if ($null -eq $versionData.version -or $versionData.version -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$') {
+        throw 'version.json version must be a SemVer core value such as 1.4.2.'
+    }
+    $buildNumber = 0
+    if ($null -eq $versionData.build -or
+        -not [int]::TryParse([string] $versionData.build, [ref] $buildNumber) -or
+        $buildNumber -lt 1) {
+        throw 'version.json build must be a positive integer.'
+    }
+    $appVersion = [string] $versionData.version
+    $imageTag = "$appVersion-build.$($buildNumber.ToString('000'))-$gitSha".ToLowerInvariant()
+    if ($imageTag -notmatch '^[a-z0-9_][a-z0-9_.-]{0,127}$') {
+        throw "Generated Docker tag is invalid: $imageTag"
+    }
 
     if (-not (Test-Path -LiteralPath $environmentPath -PathType Leaf)) {
         throw "Environment file not found: $environmentPath. Copy .env.server.example and replace its placeholders."
@@ -157,12 +171,23 @@ try {
         -BlockSize 10 `
         -ComposeProjectName 'bedtime-story-tracker'
 
-    $env:DEPLOYMENT_VERSION = $gitSha
+    $env:APP_VERSION = $appVersion
+    $env:BUILD_NUMBER = [string] $buildNumber
+    $env:GIT_SHA = $gitSha
+    $env:IMAGE_TAG = $imageTag
     $env:BUILD_DATE = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    $env:OCI_SOURCE = (& git config --get remote.origin.url).Trim()
+    if (-not $env:OCI_SOURCE) { $env:OCI_SOURCE = 'unknown' }
     $composeArguments = @('compose', '--env-file', $environmentPath, '-f', $composeFile)
 
-    Write-Host "Building deployment images for Git revision $gitSha..." -ForegroundColor Cyan
+    Write-Host "Building v$appVersion, Build $($buildNumber.ToString('000')), revision $gitSha..." -ForegroundColor Cyan
     Invoke-NativeCommand -Command 'docker' -Arguments ($composeArguments + @('build'))
+    foreach ($service in @('api', 'web')) {
+        Invoke-NativeCommand -Command 'docker' -Arguments @(
+            'tag',
+            "bedtime-story-tracker-$service`:$imageTag",
+            "bedtime-story-tracker-$service`:server-current")
+    }
 
     Write-Host 'Starting or recreating the server services...' -ForegroundColor Cyan
     Invoke-NativeCommand -Command 'docker' -Arguments ($composeArguments + @('up', '-d', '--force-recreate', '--no-build'))
@@ -196,11 +221,27 @@ try {
     $frontendUrl = $settings['FRONTEND_ORIGIN'].TrimEnd('/')
     $apiUrl = $settings['EXPO_PUBLIC_API_BASE_URL'].TrimEnd('/')
 
+    $reported = Invoke-RestMethod -Uri "$apiUrl/version" -Method Get
+    Write-Host "Expected: v$appVersion | $($env:BUILD_DATE) | Build $($buildNumber.ToString('000')) | Commit $gitSha | Server"
+    Write-Host "Reported: $($reported.displayVersion) | Commit $($reported.gitSha) | $($reported.environment)"
+    if ($reported.version -ne $appVersion -or
+        [int] $reported.build -ne $buildNumber -or
+        $reported.gitSha -ne $gitSha -or
+        ([DateTimeOffset] $reported.builtAtUtc).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') -ne $env:BUILD_DATE -or
+        $reported.environment -ne 'Server') {
+        throw 'The running API build metadata does not match the expected deployment identity.'
+    }
+
     Write-Host "Deployed Git SHA: $gitSha" -ForegroundColor Green
     Write-Host "Frontend: $frontendUrl"
     Write-Host "API: $apiUrl"
     Write-Host "Scalar (Development testing only): $apiUrl/scalar/v1"
     Invoke-NativeCommand -Command 'docker' -Arguments ($composeArguments + @('ps'))
+    foreach ($serviceName in @('api', 'frontend')) {
+        $containerId = (& docker @($composeArguments + @('ps', '-q', $serviceName))).Trim()
+        $imageIdentifier = (& docker inspect --format '{{.Image}}' $containerId).Trim()
+        Write-Host "$serviceName image: $imageIdentifier (tag $imageTag)"
+    }
 }
 finally {
     Pop-Location

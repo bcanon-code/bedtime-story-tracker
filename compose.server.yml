@@ -2,18 +2,27 @@ name: bedtime-story-tracker
 
 services:
   api:
-    image: bedtime-story-tracker-api:${DEPLOYMENT_VERSION:?Set DEPLOYMENT_VERSION to a Git SHA}
+    image: bedtime-story-tracker-api:${IMAGE_TAG:?Set IMAGE_TAG}
     build:
       context: .
       dockerfile: src/BedtimeStoryTracker.Api/Dockerfile
       args:
-        GIT_SHA: ${DEPLOYMENT_VERSION}
+        APP_VERSION: ${APP_VERSION}
+        BUILD_NUMBER: ${BUILD_NUMBER}
+        GIT_SHA: ${GIT_SHA}
         BUILD_DATE: ${BUILD_DATE:-unknown}
+        OCI_SOURCE: ${OCI_SOURCE:-unknown}
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_HTTP_PORTS: "8080"
       ConnectionStrings__ApplicationDatabase: ${ConnectionStrings__ApplicationDatabase:?Set the SQL Server connection string}
       FrontendOrigin: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN}
+      BuildMetadata__Version: ${APP_VERSION}
+      BuildMetadata__Build: ${BUILD_NUMBER}
+      BuildMetadata__GitSha: ${GIT_SHA}
+      BuildMetadata__GitDirty: "false"
+      BuildMetadata__BuiltAtUtc: ${BUILD_DATE}
+      BuildMetadata__Environment: Server
     ports:
       - "${SERVER_BIND_ADDRESS:?Set SERVER_BIND_ADDRESS}:${API_PORT:?Set API_PORT}:8080"
     restart: unless-stopped
@@ -27,14 +36,19 @@ services:
       - server
 
   frontend:
-    image: bedtime-story-tracker-web:${DEPLOYMENT_VERSION:?Set DEPLOYMENT_VERSION to a Git SHA}
+    image: bedtime-story-tracker-web:${IMAGE_TAG:?Set IMAGE_TAG}
     build:
       context: .
       dockerfile: Dockerfile.web
       args:
         EXPO_PUBLIC_API_BASE_URL: ${EXPO_PUBLIC_API_BASE_URL:?Set the browser-visible API URL}
-        GIT_SHA: ${DEPLOYMENT_VERSION}
+        APP_VERSION: ${APP_VERSION}
+        BUILD_NUMBER: ${BUILD_NUMBER}
+        GIT_SHA: ${GIT_SHA}
+        GIT_DIRTY: "false"
         BUILD_DATE: ${BUILD_DATE:-unknown}
+        BUILD_ENVIRONMENT: Server
+        OCI_SOURCE: ${OCI_SOURCE:-unknown}
     ports:
       - "${SERVER_BIND_ADDRESS:?Set SERVER_BIND_ADDRESS}:${FRONTEND_PORT:?Set FRONTEND_PORT}:8080"
     restart: unless-stopped
