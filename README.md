@@ -51,11 +51,19 @@ dotnet run --project src/BedtimeStoryTracker.Api/BedtimeStoryTracker.Api.csproj
 
 In Development, API startup applies EF Core migrations and idempotently inserts missing fictional demo children and stories. This is a local-demo convenience, not a production migration strategy. The API is available at `http://localhost:5076`; Scalar is at `http://localhost:5076/scalar/v1`.
 
-To drop and recreate only the demo database from migrations, then seed it on the next API start:
+To recreate only the demo database, provision its application SQL login from the
+local connection-string secret, apply migrations, and seed it on the next API start:
 
 ```powershell
 .\scripts\Reset-Database.ps1
 ```
+
+The script reads `ConnectionStrings__ApplicationDatabase` from the ignored root
+`.env.server` file. Local API Development startup, reset-time EF migrations, and
+Docker Compose all use that exact application connection. Reset administration
+uses the separate `ResetDatabase__AdminConnectionString` from the same ignored
+file and runs through a Linux SQL-tools container. Neither password is printed or
+placed directly on a process command line.
 
 To launch the API and Expo Web together and open the frontend and Scalar in Chrome:
 

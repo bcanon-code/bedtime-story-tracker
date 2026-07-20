@@ -163,6 +163,7 @@ $escapedNpmPath = $npmPath.Replace("'", "''")
 
 $apiCommand = @"
 `$ErrorActionPreference = 'Stop'
+Remove-Item Env:ConnectionStrings__ApplicationDatabase -ErrorAction SilentlyContinue
 Set-Location -LiteralPath '$escapedRepositoryRoot'
 & '$escapedDotnetPath' run --project '$escapedApiProjectPath'
 if (`$LASTEXITCODE -ne 0) { exit `$LASTEXITCODE }

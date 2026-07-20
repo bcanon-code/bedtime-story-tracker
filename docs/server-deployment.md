@@ -64,6 +64,16 @@ reachable. `localhost` inside the API container means the container itself, not 
 Docker host or SQL server. SQL Server should not be exposed beyond the networks
 that need it.
 
+On the development Docker workstation, `.\scripts\Reset-Database.ps1` recreates
+`BedtimeStoryTrackerDemo`, synchronizes the application login/password from the
+ignored `.env.server`, grants that login database-scoped migration permissions,
+and applies migrations. Local Development, reset-time EF commands, and Compose use
+that same application connection. Reset administration alone uses the separate
+`ResetDatabase__AdminConnectionString` from the same ignored file. SQL reset and
+idempotent migration execution run through `mcr.microsoft.com/mssql-tools`, avoiding
+dependence on the workstation SQL TLS/domain stack. Stop the API container before
+resetting the database.
+
 In Development, API startup applies existing EF Core migrations and idempotently
 seeds missing fictional children and stories. It does not reset the database or
 seed completed sessions. Startup migrations are a demo/testing convenience, not a
