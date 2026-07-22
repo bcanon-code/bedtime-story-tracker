@@ -50,3 +50,6 @@ Desktop.ini
 *.tmp
 *.temp
 *.log
+
+# diagnostics
+diagnostics/
