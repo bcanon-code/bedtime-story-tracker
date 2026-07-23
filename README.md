@@ -43,7 +43,7 @@ Expo starts the development server and prints the local web URL in the terminal.
 
 ## Run the API
 
-The development connection string in `src/BedtimeStoryTracker.Api/appsettings.Development.json` targets only `BedtimeStoryTrackerDemo` on `localhost` using Windows authentication. Verify that server name for your machine before starting:
+The development connection string in `src/BedtimeStoryTracker.Api/appsettings.Development.json` targets only `BedtimeStoryTrackerDevelopment` on `localhost` using Windows authentication. The interview launcher selects the separate Demo environment and `BedtimeStoryTrackerDemo` database. Verify that server name for your machine before starting:
 
 ```bash
 dotnet run --project src/BedtimeStoryTracker.Api/BedtimeStoryTracker.Api.csproj
@@ -51,25 +51,27 @@ dotnet run --project src/BedtimeStoryTracker.Api/BedtimeStoryTracker.Api.csproj
 
 In Development, API startup applies EF Core migrations and idempotently inserts missing fictional demo children and stories. This is a local-demo convenience, not a production migration strategy. The API is available at `http://localhost:5076`; Scalar is at `http://localhost:5076/scalar/v1`.
 
-To recreate only the demo database, provision its application SQL login from the
-local connection-string secret, apply migrations, and seed it on the next API start:
+To recreate only the local Demo database from its tracked Windows-authenticated
+connection, apply migrations, and verify fictional seed data:
 
 ```powershell
-.\scripts\Reset-Database.ps1
+.\scripts\Reset-Database.ps1 -Environment Demo
 ```
 
-The script reads `ConnectionStrings__ApplicationDatabase` from the ignored root
-`.env.server` file. Local API Development startup, reset-time EF migrations, and
-Docker Compose all use that exact application connection. Reset administration
-uses the separate `ResetDatabase__AdminConnectionString` from the same ignored
-file and runs through a Linux SQL-tools container. Neither password is printed or
-placed directly on a process command line.
+Use `-Environment Development` to reset the separate local development database.
+The script rejects Production and requires exact database-name confirmation unless
+`-Force` is explicitly supplied. Docker credentials remain in the ignored
+`.env.server` file and are not used by this local reset command.
 
 To launch the API and Expo Web together and open the frontend and Scalar in Chrome:
 
 ```powershell
 .\scripts\Start-LocalDemo.ps1
 ```
+
+Development, Demo, and Production database isolation, migration behavior, and
+secret-handling rules are documented in
+[`docs/database-environments.md`](docs/database-environments.md).
 
 For a versioned Docker deployment on a trusted local testing server, see
 [`docs/server-deployment.md`](docs/server-deployment.md).

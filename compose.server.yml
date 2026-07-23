@@ -13,7 +13,7 @@ services:
         BUILD_DATE: ${BUILD_DATE:-unknown}
         OCI_SOURCE: ${OCI_SOURCE:-unknown}
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: Demo
       ASPNETCORE_HTTP_PORTS: "8080"
       ConnectionStrings__ApplicationDatabase: ${ConnectionStrings__ApplicationDatabase:?Set the SQL Server connection string}
       FrontendOrigin: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN}

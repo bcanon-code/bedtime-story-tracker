@@ -3,7 +3,7 @@
 This guide runs the Expo web export and ASP.NET Core API as versioned Docker
 containers on a trusted local network. SQL Server remains external. This is a
 testing deployment, not production hosting: it uses HTTP, has no authentication,
-and exposes Development-only Scalar/OpenAPI and startup migrations.
+and exposes Demo-only Scalar/OpenAPI and startup migrations.
 
 ## Prerequisites and required server facts
 
@@ -64,17 +64,14 @@ reachable. `localhost` inside the API container means the container itself, not 
 Docker host or SQL server. SQL Server should not be exposed beyond the networks
 that need it.
 
-On the development Docker workstation, `.\scripts\Reset-Database.ps1` recreates
-`BedtimeStoryTrackerDemo`, synchronizes the application login/password from the
-ignored `.env.server`, grants that login database-scoped migration permissions,
-and applies migrations. Local Development, reset-time EF commands, and Compose use
-that same application connection. Reset administration alone uses the separate
-`ResetDatabase__AdminConnectionString` from the same ignored file. SQL reset and
-idempotent migration execution run through `mcr.microsoft.com/mssql-tools`, avoiding
-dependence on the workstation SQL TLS/domain stack. Stop the API container before
-resetting the database.
+`Reset-Database.ps1` is intentionally limited to the tracked local Windows-authenticated
+Development and Demo connections; it does not read `.env.server` or reset a remote
+container database. Provision the Docker Demo database and its least-privilege SQL
+login through an approved administrative process, then place only the application
+connection in the ignored `.env.server`. Stop the API container before an
+administrator performs any destructive database maintenance.
 
-In Development, API startup applies existing EF Core migrations and idempotently
+In Demo, API startup applies existing EF Core migrations and idempotently
 seeds missing fictional children and stories. It does not reset the database or
 seed completed sessions. Startup migrations are a demo/testing convenience, not a
 recommended production migration strategy.
@@ -106,7 +103,7 @@ Expected URLs are:
 - OpenAPI document: `http://SERVER_HOST:API_PORT/openapi/v1.json`
 
 Scalar and OpenAPI are intentionally available because the container uses the
-Development environment for local server testing, migrations, and seeding. Do not
+Demo environment for local server testing, migrations, and seeding. Do not
 expose them or this unauthenticated API to an untrusted network.
 
 ## Operate and troubleshoot
@@ -142,7 +139,7 @@ Common failures:
 - Migration fails: verify the SQL login can read/write the target database and
   apply the existing migrations.
 - Port already allocated: select unused host ports and update both URLs.
-- Scalar is missing: confirm `ASPNETCORE_ENVIRONMENT=Development` remains set for
+- Scalar is missing: confirm `ASPNETCORE_ENVIRONMENT=Demo` remains set for
   this testing-only Compose deployment.
 
 Firewall changes, reverse proxies, HTTPS termination, certificates, domain setup,

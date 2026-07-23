@@ -3,6 +3,10 @@
 [CmdletBinding()]
 param(
     [Parameter()]
+    [ValidateSet('Development', 'Demo')]
+    [string] $Environment = 'Demo',
+
+    [Parameter()]
     [switch] $Force,
 
     [Parameter()]
@@ -53,16 +57,20 @@ function Test-TcpPortInUse {
 
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $apiProject = Join-Path $repositoryRoot 'src\BedtimeStoryTracker.Api\BedtimeStoryTracker.Api.csproj'
-$developmentSettings = Join-Path $repositoryRoot 'src\BedtimeStoryTracker.Api\appsettings.Development.json'
+$environmentSettings = Join-Path $repositoryRoot "src\BedtimeStoryTracker.Api\appsettings.$Environment.json"
 $contextName = 'ApplicationDbContext'
-$expectedDatabase = 'BedtimeStoryTrackerDemo'
+$expectedDatabase = if ($Environment -eq 'Development') {
+    'BedtimeStoryTrackerDevelopment'
+} else {
+    'BedtimeStoryTrackerDemo'
+}
 $seedVerificationPort = 5077
 
 if (-not (Test-Path -LiteralPath $apiProject -PathType Leaf)) {
     throw "API project was not found: $apiProject"
 }
-if (-not (Test-Path -LiteralPath $developmentSettings -PathType Leaf)) {
-    throw "Development settings were not found: $developmentSettings"
+if (-not (Test-Path -LiteralPath $environmentSettings -PathType Leaf)) {
+    throw "$Environment settings were not found: $environmentSettings"
 }
 if (-not (Get-Command -Name 'dotnet' -ErrorAction SilentlyContinue)) {
     throw "Required command 'dotnet' was not found on PATH."
@@ -73,10 +81,10 @@ if ($LASTEXITCODE -ne 0) {
     throw "Required command 'dotnet ef' is unavailable. Install or restore the EF Core CLI tools, then try again."
 }
 
-$settings = Get-Content -Raw -LiteralPath $developmentSettings | ConvertFrom-Json
+$settings = Get-Content -Raw -LiteralPath $environmentSettings | ConvertFrom-Json
 $connectionString = $settings.ConnectionStrings.ApplicationDatabase
 if ([string]::IsNullOrWhiteSpace($connectionString)) {
-    throw "Connection string 'ApplicationDatabase' was not found in $developmentSettings."
+    throw "Connection string 'ApplicationDatabase' was not found in $environmentSettings."
 }
 
 $connection = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
@@ -85,16 +93,16 @@ $databaseName = $connection.InitialCatalog
 $serverName = $connection.DataSource
 
 if ($databaseName -cne $expectedDatabase) {
-    throw "Refusing to reset: the Development connection string must target exactly '$expectedDatabase', but targets '$databaseName'."
+    throw "Refusing to reset: the $Environment connection string must target exactly '$expectedDatabase', but targets '$databaseName'."
 }
 if ([string]::IsNullOrWhiteSpace($serverName)) {
     throw 'Refusing to reset: the Development connection string does not specify a SQL Server instance.'
 }
 
-Write-Host 'Local development database reset target:' -ForegroundColor Yellow
+Write-Host "Local $Environment database reset target:" -ForegroundColor Yellow
 Write-Host "  Server:   $serverName"
 Write-Host "  Database: $databaseName"
-Write-Host "  Settings: $developmentSettings"
+Write-Host "  Settings: $environmentSettings"
 
 if (-not $Force) {
     $confirmation = Read-Host "Type $expectedDatabase to confirm that its data may be permanently deleted"
@@ -109,8 +117,8 @@ $previousConnectionString = $env:ConnectionStrings__ApplicationDatabase
 $seedProcess = $null
 
 try {
-    $env:ASPNETCORE_ENVIRONMENT = 'Development'
-    $env:DOTNET_ENVIRONMENT = 'Development'
+    $env:ASPNETCORE_ENVIRONMENT = $Environment
+    $env:DOTNET_ENVIRONMENT = $Environment
     $env:ConnectionStrings__ApplicationDatabase = $connectionString
 
     Invoke-CheckedCommand -Description "Dropping only $expectedDatabase..." -Command {
@@ -130,7 +138,7 @@ try {
     }
 
     if ($SkipSeedVerification) {
-        Write-Warning 'Seed verification was skipped. Start the API in Development to run the existing development seeder.'
+        Write-Warning "Seed verification was skipped. Start the API in $Environment to run the existing demo-data seeder."
     }
     else {
         if (Test-TcpPortInUse -Port $seedVerificationPort) {
@@ -143,7 +151,7 @@ try {
             throw "Built API assembly was not found: $apiAssembly"
         }
 
-        Write-Host 'Starting the API briefly to run and verify the existing Development seeder...' -ForegroundColor Cyan
+        Write-Host "Starting the API briefly to run and verify the existing $Environment seeder..." -ForegroundColor Cyan
         $seedProcess = Start-Process -FilePath 'dotnet' `
             -ArgumentList @($apiAssembly, '--urls', "http://127.0.0.1:$seedVerificationPort") `
             -WorkingDirectory $apiOutputDirectory `
@@ -194,4 +202,9 @@ finally {
 
 Write-Host 'Database reset completed successfully.' -ForegroundColor Green
 Write-Host "Only $expectedDatabase on $serverName was dropped and recreated."
-Write-Host 'Next: run .\scripts\Start-LocalDemo.ps1 for the normal local workflow.'
+if ($Environment -eq 'Demo') {
+    Write-Host 'Next: run .\scripts\Start-LocalDemo.ps1 for the normal demo workflow.'
+}
+else {
+    Write-Host 'Next: run the API with the Development launch profile.'
+}
