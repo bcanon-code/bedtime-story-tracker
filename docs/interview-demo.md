@@ -1,98 +1,137 @@
 # Interview demo guide
 
-## Fastest startup and primary mode
+## Demo objective
 
-Use the local API plus Expo Web. This directly demonstrates the React Native frontend and its typed HTTP integration while avoiding the additional Docker health, networking, and SQL permission failure points.
+The primary deliverable is a React Native Web application written in TypeScript. Keep the walkthrough focused on the shared React Native component tree and complete bedtime-reading workflow. The ASP.NET Core API, SQL Server persistence, Docker packaging, and stored build provenance support that frontend story and demonstrate full-stack depth.
 
-From the repository root, run:
+## Primary startup mode
+
+The lowest-risk verified repository path is the local launcher:
 
 ```powershell
 .\scripts\Start-LocalDemo.ps1
 ```
 
-The launcher starts the ASP.NET Core API, waits for `http://localhost:5076/health`, starts Expo Web, waits for `http://localhost:8081`, and opens the frontend and Scalar (`http://localhost:5076/scalar/v1`) in one Chrome window. It requires Node/npm, .NET 10, Chrome, and a reachable local default SQL Server instance with Windows authentication. If SQL Server is unavailable, inaccessible, or cannot accept migrations, the API does not become healthy and the launcher times out. If Docker is unavailable, this primary mode is unaffected.
+Prerequisites are Node.js/npm, the .NET 10 SDK, Google Chrome, and a local default SQL Server instance reachable at `localhost` with Windows authentication. Install the locked frontend dependencies with `npm ci` before interview day.
 
-`npm run web` is useful for starting only Expo, but it is not a functional offline demo mode: the workflow still requires the API at `http://localhost:5076` unless `EXPO_PUBLIC_API_BASE_URL` is set to another working API.
+The launcher starts the API and Expo Web in separate PowerShell windows, waits for the API, waits for the frontend, and then opens the application and Scalar together in Chrome. Expected URLs:
 
-## Fallback mode
+- Application: `http://localhost:8081`
+- API health: `http://localhost:5076/health`
+- Scalar API reference: `http://localhost:5076/scalar/v1`
+- API build metadata: `http://localhost:5076/version`
 
-Use the versioned Docker deployment only if it has been started and fully rehearsed on the interview machine immediately beforehand. It packages the frontend and API, but it still depends on Docker health, SQL connectivity, container permissions, and correct environment configuration. Current local diagnostics contain a database bootstrap failure (`CREATE DATABASE permission denied in database 'master'`), so an unverified Docker start is not a safe fallback.
+Before presenting, confirm that the health URL returns a successful response and that the application loads children and stories. API startup applies the existing migrations and seeds missing fictional demo data; it does not reset the database or seed completed sessions.
 
-If the launcher itself is the only problem (for example, Chrome discovery), start the same primary mode manually in two terminals:
+## Fallback startup mode
+
+If the launcher fails because of its process or Chrome orchestration, start the same local architecture manually in two PowerShell terminals:
 
 ```powershell
 dotnet run --project src/BedtimeStoryTracker.Api/BedtimeStoryTracker.Api.csproj
+```
+
+```powershell
+$env:BROWSER = 'none'
 npm run web
 ```
 
-Then open `http://localhost:8081` and optionally `http://localhost:5076/scalar/v1`.
+Then open `http://localhost:8081`, verify `http://localhost:5076/health`, and optionally open Scalar. This fallback uses the same prerequisites, ports, API, and database as the primary mode and is supported directly by the repository commands. Do not use Docker as an unrehearsed interview fallback; it adds environment-file, container, networking, and SQL-authentication dependencies.
 
 ## Five-minute walkthrough
 
-1. Start `.\scripts\Start-LocalDemo.ps1` and show the React Native Web UI at `http://localhost:8081`.
-2. Open `App.tsx`: explain that it owns the small linear workflow, API loading state, selections, timer, notes, and save status in local React state.
-3. Open `CalmnessSelector.tsx`: show the narrow `CalmnessValue` union and controlled `value`/`onChange` props.
-4. In the UI, point out that fictional children and story summaries were loaded through the API client.
-5. Complete both pre-reading calmness selections and optionally enter a short note.
-6. Select a story, wait for its detail to load, and begin reading.
-7. Show the elapsed timer. Explain that a `useEffect` creates the interval only during the reading state and clears it when that state ends or the component unmounts.
-8. Finish reading, complete both post-reading selections, and continue to the summary.
-9. Show `SessionSummaryCard`, the before/after comparison, duration, automatic save status, retry-on-failure action, and reset action.
-10. Briefly open `apiTypes.ts` and `bedtimeApi.ts`: explain DTO contracts, runtime response guards, non-success HTTP handling, and the configurable API base URL.
-11. Optionally show Scalar or the persisted session endpoint as supporting full-stack depth; keep the focus on the frontend.
-12. Close with one deliberate deferral: authentication and multi-tenancy were excluded to keep the interview workflow small and reviewable.
+1. Open `http://localhost:8081` and identify it as one TypeScript React Native application rendered for the web.
+2. Complete the required pre-reading calmness check-in for both fictional children and optionally add a neutral note.
+3. Select a story and let its detail load from the API.
+4. Start reading, point out the updating timer, then finish reading.
+5. Complete the required post-reading calmness check-in and optionally add a note.
+6. Continue to the summary; show the duration, before/after values, derived changes, notes, and automatic-save status.
+7. Select **Completed sessions** and show the newly saved record in the newest-first history.
+8. Resize the same page to approximately 375 pixels and 1280 pixels; show the history changing between stacked and wider arrangements.
+9. On the new history record, show version, build, Git SHA, and environment. Optionally compare them with the API `/version` response.
+10. Explain one deliberate deferral: authentication and multi-tenancy would be required before treating family data as a real multi-user product, but were excluded from this interview demo.
 
-## Architecture and TypeScript talking points
+## Responsive-component explanation
 
-- `index.ts` registers `App.tsx` with Expo. The same React Native component tree is bundled for web; core UI uses `View`, `Text`, `Pressable`, `TextInput`, and `ScrollView`, with no browser-only elements.
-- `App.tsx` remains the workflow orchestrator because the flow is small and linear. Extracted components represent genuinely reusable or distinct responsibilities, while API access, theme tokens, formatting, build metadata, and domain/API types live outside it.
-- Local state is enough for one screen and avoids Redux or Zustand ceremony. Values derived from current state are not stored again.
-- Built-in `fetch` is adequate for four endpoints. The API client centralizes the base URL, HTTP checks, response validation, and user-appropriate errors.
-- DTO interfaces document the HTTP boundary; `CalmnessValue` restricts UI choices to `1 | 2 | 3 | 4 | 5`; strict compiler checks catch identifier, property, and nullability mistakes. Runtime guards cover the point where JSON is still `unknown`.
-- One ASP.NET Core API and EF Core migrations demonstrate familiar .NET depth without splitting a small demo into unnecessary services.
+`CompletedSessionList` is one shared component. It calls `useWindowDimensions`, treats widths of 760 pixels or more as wide, and changes presentation styles by width: primary details become a row, observations wrap horizontally, and notes sit side by side. Narrow widths retain a stacked layout.
 
-## React compared with Web Forms
+The DTOs, loading/error states, list rendering, accessibility behavior, event handlers, and API data are shared at every width. There is no duplicated web or native history component. Keeping one component and changing only its presentation reduces platform drift and keeps fixes in one place.
 
-- Props are typed inputs to a component, similar in purpose to control properties but passed explicitly from a parent.
-- State is client-side data that causes a declarative re-render, rather than page/control state restored around a server postback.
-- Conditional rendering derives visible UI from state, instead of toggling a server control's `Visible` property.
-- A controlled component receives its current value and reports changes upward, similar to form binding but with explicit one-way data flow.
-- Effects handle work tied to render lifecycle, such as loading data or owning a timer, rather than page lifecycle events.
-- React Native primitives are platform-neutral controls rendered by the target platform; React Native Web maps the same component implementation to the browser.
+## Build-provenance explanation
 
-## Likely interview questions
+The API creates the authoritative build metadata when it starts. When a new session is saved, the API—not the browser—stores the application version, build number, Git SHA, and environment with that session. The history response returns those stored values.
 
-- **Why no state library?** The workflow is local, linear, and small; lifting state into `App.tsx` keeps ownership obvious.
-- **Why both TypeScript interfaces and runtime guards?** TypeScript checks code at build time, but an HTTP server can still return malformed JSON at runtime.
-- **How are duplicate saves prevented?** A ref blocks concurrent requests and the saved status prevents another completed save.
-- **What happens when saving fails?** The summary remains visible, the user sees the error, and can retry or deliberately discard the unsaved session.
-- **Why no navigation package?** Four mutually exclusive steps are clearer as a typed workflow state for this single linear screen.
-- **What would come next?** Authentication and tenant-aware authorization would precede family data or history UI; neither belongs in this demo checkpoint.
+The provenance columns are nullable so sessions created before provenance was introduced remain honest: the UI displays **Build not recorded** instead of inventing metadata. Provenance can narrow regression investigation to a deployed build and environment; it provides traceability, not proof of root cause or automatic root-cause analysis.
+
+## React and Web Forms talking points
+
+- **Props:** explicit, typed inputs from a parent, comparable to control properties or parameters.
+- **State:** client-side values that trigger declarative re-rendering, rather than values restored around a server postback.
+- **Controlled components:** the parent owns the value and the child reports changes through a callback, making one-way data flow explicit.
+- **Conditional rendering:** the visible workflow is derived from state instead of toggling server-control `Visible` properties.
+- **Effects:** lifecycle-bound work such as API loading and timer setup/cleanup, rather than page lifecycle event handlers.
+- **React Native primitives:** `View`, `Text`, `Pressable`, `TextInput`, `ScrollView`, and `FlatList` form a platform-neutral component vocabulary; React Native Web renders the same implementation in the browser.
+
+## TypeScript talking points
+
+- Typed DTOs document children, stories, save requests/responses, and completed-session history at the HTTP boundary.
+- API functions centralize contracts, status handling, runtime JSON guards, and nullable provenance.
+- Narrow workflow and save-status unions make valid UI states explicit.
+- `CalmnessValue` restricts check-ins to `1 | 2 | 3 | 4 | 5`.
+- Nullable types force old-session provenance and optional notes to be handled deliberately.
+- `npx tsc --noEmit` validates identifiers, props, DTO fields, state transitions, and null handling without generating files.
 
 ## Known limitations
 
-- The functional workflow requires the API and SQL Server; there is no offline/mock frontend mode.
-- Refreshing the page clears in-memory workflow state.
-- Authentication, multi-tenancy, and session-history UI are deliberately deferred.
-- Initial and story-detail requests are aborted on cleanup; the session-save request is not aborted on unmount.
-- The frontend assumes exactly two displayed children after requiring at least two API records.
-- Docker is not a safe fallback until its recorded database create-permission failure is resolved and reverified.
-- Automated end-to-end browser coverage is not present; the full workflow still requires manual verification.
+- React Native Web was manually tested previously; this checkpoint does not claim a new browser verification.
+- Native Android and iOS remain unverified.
+- Authentication and multi-tenancy are deferred.
+- This is an interview demo using fictional data, not a production healthcare application.
+- Provenance supports traceability, not automatic root-cause analysis.
+- The workflow requires the API and SQL Server; there is no offline/mock mode.
+- Refreshing clears the active in-memory workflow, although completed sessions are persisted.
+- Automated end-to-end browser coverage is not present.
+
+## Pre-interview checklist
+
+- Confirm `git status --short` is clean.
+- Confirm the intended commit with `git rev-parse HEAD`.
+- Run `npx tsc --noEmit`.
+- Run `dotnet build src/BedtimeStoryTracker.Api/BedtimeStoryTracker.Api.csproj`.
+- Confirm the local SQL Server database is available.
+- Start the application before the interview.
+- Confirm history contains known records.
+- Test approximately 375-pixel and 1280-pixel widths.
+- Check the browser console for unexpected errors.
+- Keep the two fallback commands ready.
+- Close unrelated windows.
+- Disable notifications.
 
 ## Shutdown
 
-Close the two application PowerShell windows opened by the launcher, or press Ctrl+C in each. Closing Chrome alone does not stop the API or Expo processes.
+For primary or fallback local mode, press Ctrl+C in both the API and Expo PowerShell windows, or close both windows. Closing Chrome does not stop either process.
 
-## Fifteen minutes before the interview
+If the rehearsed Docker deployment was used, run this from the same PowerShell session that ran `Deploy-Server.ps1`:
 
-- Pull the intended branch and confirm the working tree is clean.
-- Confirm the exact commit with `git rev-parse HEAD`.
-- Run `npx tsc --noEmit`.
-- Start `.\scripts\Start-LocalDemo.ps1`.
-- Confirm children and stories load, then complete and save one full session.
-- Confirm the timer starts, stops, and resets.
-- Check the browser console for unexpected errors.
-- Keep `App.tsx`, `CalmnessSelector.tsx`, `apiTypes.ts`, and Scalar ready.
-- Close unrelated windows and disable notifications.
-- Keep the two manual startup commands available.
-- Test Docker only if it is intended to serve as the fallback.
+```powershell
+docker compose --env-file .env.server -f compose.server.yml down
+```
+
+## Ten-minute manual verification
+
+These checks are intentionally left for the presenter and are not claimed as passed by this document:
+
+1. Start the primary demo mode.
+2. Confirm the frontend opens.
+3. Confirm children and stories load.
+4. Complete one full session.
+5. Confirm automatic save.
+6. Open completed-session history.
+7. Confirm provenance appears on the new record.
+8. Test approximately 375-pixel width.
+9. Test approximately 1280-pixel width.
+10. Confirm no browser-console errors.
+11. Practice the five-minute walkthrough.
+12. Practice the responsive-component explanation.
+13. Practice the provenance explanation.
+14. Test the fallback startup method.
