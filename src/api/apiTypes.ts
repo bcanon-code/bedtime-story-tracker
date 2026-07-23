@@ -32,6 +32,10 @@ export interface CreateReadingSessionResponse {
   savedAtUtc: string;
   storyTitle: string;
   elapsedSeconds: number;
+  appVersion: string | null;
+  buildNumber: number | null;
+  gitSha: string | null;
+  buildEnvironment: string | null;
 }
 
 export interface ReadingSessionChildObservationDto {
@@ -50,5 +54,9 @@ export interface ReadingSessionHistoryDto {
   elapsedSeconds: number;
   beforeNotes: string | null;
   afterNotes: string | null;
+  appVersion: string | null;
+  buildNumber: number | null;
+  gitSha: string | null;
+  buildEnvironment: string | null;
   childObservations: ReadingSessionChildObservationDto[];
 }

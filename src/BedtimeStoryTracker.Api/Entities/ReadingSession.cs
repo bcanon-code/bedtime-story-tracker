@@ -18,6 +18,14 @@ public sealed class ReadingSession
 
     public string? AfterNotes { get; set; }
 
+    public string? AppVersion { get; set; }
+
+    public int? BuildNumber { get; set; }
+
+    public string? GitSha { get; set; }
+
+    public string? BuildEnvironment { get; set; }
+
     public Story Story { get; set; } = null!;
 
     public ICollection<ReadingSessionChildObservation> ChildObservations { get; set; } = [];

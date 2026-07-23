@@ -71,6 +71,10 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
             entity.Property(session => session.ElapsedSeconds).HasColumnType("int").IsRequired();
             entity.Property(session => session.BeforeNotes).HasColumnType("nvarchar(2000)").HasMaxLength(2000);
             entity.Property(session => session.AfterNotes).HasColumnType("nvarchar(2000)").HasMaxLength(2000);
+            entity.Property(session => session.AppVersion).HasColumnType("nvarchar(50)").HasMaxLength(50);
+            entity.Property(session => session.BuildNumber).HasColumnType("int");
+            entity.Property(session => session.GitSha).HasColumnType("nvarchar(64)").HasMaxLength(64);
+            entity.Property(session => session.BuildEnvironment).HasColumnType("nvarchar(50)").HasMaxLength(50);
             entity.HasIndex(session => session.StoryId, "IX_ReadingSession_StoryId");
             entity.HasOne(session => session.Story)
                 .WithMany()

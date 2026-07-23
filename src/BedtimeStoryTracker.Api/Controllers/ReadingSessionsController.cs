@@ -8,7 +8,9 @@ namespace BedtimeStoryTracker.Api.Controllers;
 
 [ApiController]
 [Route("api/reading-sessions")]
-public sealed class ReadingSessionsController(ApplicationDbContext dbContext) : ControllerBase
+public sealed class ReadingSessionsController(
+    ApplicationDbContext dbContext,
+    BuildMetadata buildMetadata) : ControllerBase
 {
     private const int RecentSessionLimit = 50;
 
@@ -32,6 +34,10 @@ public sealed class ReadingSessionsController(ApplicationDbContext dbContext) : 
                 session.ElapsedSeconds,
                 session.BeforeNotes,
                 session.AfterNotes,
+                session.AppVersion,
+                session.BuildNumber,
+                session.GitSha,
+                session.BuildEnvironment,
                 session.ChildObservations
                     .OrderBy(observation => observation.DisplayOrder)
                     .Select(observation => new ReadingSessionChildObservationResponse(
@@ -115,6 +121,10 @@ public sealed class ReadingSessionsController(ApplicationDbContext dbContext) : 
             ElapsedSeconds = request.ElapsedSeconds,
             BeforeNotes = NormalizeNotes(request.BeforeNotes),
             AfterNotes = NormalizeNotes(request.AfterNotes),
+            AppVersion = buildMetadata.Version,
+            BuildNumber = buildMetadata.Build,
+            GitSha = buildMetadata.GitSha,
+            BuildEnvironment = buildMetadata.Environment,
             ChildObservations = request.ChildObservations
                 .Select((observation, index) => new ReadingSessionChildObservation
                 {
@@ -134,7 +144,11 @@ public sealed class ReadingSessionsController(ApplicationDbContext dbContext) : 
             session.Id,
             session.CompletedAtUtc,
             session.StoryTitleSnapshot,
-            session.ElapsedSeconds));
+            session.ElapsedSeconds,
+            session.AppVersion,
+            session.BuildNumber,
+            session.GitSha,
+            session.BuildEnvironment));
     }
 
     private static string? NormalizeNotes(string? notes) =>
@@ -157,7 +171,11 @@ public sealed record CreateReadingSessionResponse(
     int SessionId,
     DateTime SavedAtUtc,
     string StoryTitle,
-    int ElapsedSeconds);
+    int ElapsedSeconds,
+    string? AppVersion,
+    int? BuildNumber,
+    string? GitSha,
+    string? BuildEnvironment);
 
 public sealed record ReadingSessionHistoryResponse(
     int SessionId,
@@ -167,6 +185,10 @@ public sealed record ReadingSessionHistoryResponse(
     int ElapsedSeconds,
     string? BeforeNotes,
     string? AfterNotes,
+    string? AppVersion,
+    int? BuildNumber,
+    string? GitSha,
+    string? BuildEnvironment,
     IReadOnlyList<ReadingSessionChildObservationResponse> ChildObservations);
 
 public sealed record ReadingSessionChildObservationResponse(

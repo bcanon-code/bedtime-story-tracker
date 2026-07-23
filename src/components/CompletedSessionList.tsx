@@ -25,6 +25,27 @@ export interface CompletedSessionListProps {
 
 const wideLayoutBreakpoint = 760;
 
+function formatBuildProvenance(session: ReadingSessionHistoryDto) {
+  if (
+    session.appVersion === null ||
+    session.buildNumber === null ||
+    session.gitSha === null ||
+    session.buildEnvironment === null
+  ) {
+    return {
+      primary: 'Build not recorded',
+      secondary: null,
+      accessible: 'Build provenance was not recorded',
+    };
+  }
+
+  return {
+    primary: `v${session.appVersion} · Build ${String(session.buildNumber).padStart(3, '0')}`,
+    secondary: `${session.gitSha.slice(0, 7)} · ${session.buildEnvironment}`,
+    accessible: `Version ${session.appVersion}, build ${session.buildNumber}, commit ${session.gitSha}, ${session.buildEnvironment}`,
+  };
+}
+
 export function CompletedSessionList({
   sessions,
   isLoading,
@@ -115,6 +136,7 @@ export function CompletedSessionList({
       }
       renderItem={({ item }) => {
         const completedAt = formatCompletedSessionDateTime(item.completedAtUtc);
+        const provenance = formatBuildProvenance(item);
         const accessibleChildren = item.childObservations
           .map((child) => {
             const change = child.afterCalmness - child.beforeCalmness;
@@ -126,7 +148,7 @@ export function CompletedSessionList({
         return (
           <View
             accessible
-            accessibilityLabel={`${completedAt}. ${item.storyTitle}. Reading time ${formatElapsedTime(item.elapsedSeconds)}. ${accessibleChildren}`}
+            accessibilityLabel={`${completedAt}. ${item.storyTitle}. Reading time ${formatElapsedTime(item.elapsedSeconds)}. ${accessibleChildren}. ${provenance.accessible}`}
             style={styles.sessionCard}
           >
             <View style={[styles.primaryDetails, isWide && styles.primaryDetailsWide]}>
@@ -172,6 +194,17 @@ export function CompletedSessionList({
                 ) : null}
               </View>
             ) : null}
+
+            <View style={styles.provenance}>
+              <Text numberOfLines={1} style={styles.provenancePrimary}>
+                {provenance.primary}
+              </Text>
+              {provenance.secondary ? (
+                <Text numberOfLines={1} style={styles.provenanceSecondary}>
+                  {provenance.secondary}
+                </Text>
+              ) : null}
+            </View>
           </View>
         );
       }}
@@ -335,6 +368,22 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     lineHeight: 22,
     marginTop: theme.spacing.xs,
+  },
+  provenance: {
+    borderTopColor: theme.colors.border,
+    borderTopWidth: 1,
+    marginTop: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+  },
+  provenancePrimary: {
+    color: theme.colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  provenanceSecondary: {
+    color: theme.colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
   },
   retryButton: {
     alignItems: 'center',

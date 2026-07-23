@@ -41,6 +41,9 @@ const isStoryDetailDto = (value: unknown): value is StoryDetailDto =>
 const isNullableString = (value: unknown) =>
   value === null || typeof value === 'string';
 
+const isNullableNumber = (value: unknown) =>
+  value === null || typeof value === 'number';
+
 const isReadingSessionChildObservationDto = (
   value: unknown,
 ): value is ReadingSessionChildObservationDto =>
@@ -62,6 +65,10 @@ const isReadingSessionHistoryDto = (
   hasNumber(value, 'elapsedSeconds') &&
   isNullableString(value.beforeNotes) &&
   isNullableString(value.afterNotes) &&
+  isNullableString(value.appVersion) &&
+  isNullableNumber(value.buildNumber) &&
+  isNullableString(value.gitSha) &&
+  isNullableString(value.buildEnvironment) &&
   Array.isArray(value.childObservations) &&
   value.childObservations.every(isReadingSessionChildObservationDto);
 
@@ -87,7 +94,11 @@ const isCreateReadingSessionResponse = (
   typeof value.sessionId === 'number' &&
   hasString(value, 'savedAtUtc') &&
   hasString(value, 'storyTitle') &&
-  typeof value.elapsedSeconds === 'number';
+  typeof value.elapsedSeconds === 'number' &&
+  isNullableString(value.appVersion) &&
+  isNullableNumber(value.buildNumber) &&
+  isNullableString(value.gitSha) &&
+  isNullableString(value.buildEnvironment);
 
 interface ProblemDetails {
   title?: string;
