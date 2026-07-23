@@ -2,6 +2,8 @@ import type {
   ChildDto,
   CreateReadingSessionRequest,
   CreateReadingSessionResponse,
+  ReadingSessionChildObservationDto,
+  ReadingSessionHistoryDto,
   StoryDetailDto,
   StorySummaryDto,
 } from './apiTypes';
@@ -35,6 +37,33 @@ const isStoryDetailDto = (value: unknown): value is StoryDetailDto =>
   isStorySummaryDto(value) &&
   Array.isArray(value.paragraphs) &&
   value.paragraphs.every((paragraph: unknown) => typeof paragraph === 'string');
+
+const isNullableString = (value: unknown) =>
+  value === null || typeof value === 'string';
+
+const isReadingSessionChildObservationDto = (
+  value: unknown,
+): value is ReadingSessionChildObservationDto =>
+  isRecord(value) &&
+  hasNumber(value, 'childId') &&
+  hasString(value, 'childName') &&
+  hasNumber(value, 'beforeCalmness') &&
+  hasNumber(value, 'afterCalmness') &&
+  hasNumber(value, 'displayOrder');
+
+const isReadingSessionHistoryDto = (
+  value: unknown,
+): value is ReadingSessionHistoryDto =>
+  isRecord(value) &&
+  hasNumber(value, 'sessionId') &&
+  hasString(value, 'completedAtUtc') &&
+  hasNumber(value, 'storyId') &&
+  hasString(value, 'storyTitle') &&
+  hasNumber(value, 'elapsedSeconds') &&
+  isNullableString(value.beforeNotes) &&
+  isNullableString(value.afterNotes) &&
+  Array.isArray(value.childObservations) &&
+  value.childObservations.every(isReadingSessionChildObservationDto);
 
 async function requestJson(
   path: string,
@@ -162,6 +191,18 @@ export async function getStoryById(
 
   if (!isStoryDetailDto(data)) {
     throw new Error('The bedtime API returned an invalid story response.');
+  }
+
+  return data;
+}
+
+export async function getReadingSessions(
+  signal?: AbortSignal,
+): Promise<ReadingSessionHistoryDto[]> {
+  const data = await requestJson('/api/reading-sessions', signal);
+
+  if (!Array.isArray(data) || !data.every(isReadingSessionHistoryDto)) {
+    throw new Error('The bedtime API returned an invalid session history response.');
   }
 
   return data;

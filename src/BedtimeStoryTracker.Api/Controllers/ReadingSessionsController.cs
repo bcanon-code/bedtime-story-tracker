@@ -10,6 +10,42 @@ namespace BedtimeStoryTracker.Api.Controllers;
 [Route("api/reading-sessions")]
 public sealed class ReadingSessionsController(ApplicationDbContext dbContext) : ControllerBase
 {
+    private const int RecentSessionLimit = 50;
+
+    [HttpGet]
+    [EndpointSummary("List recently completed reading sessions")]
+    [EndpointDescription("Returns up to 50 completed sessions, newest first, using saved story and child snapshots.")]
+    [ProducesResponseType<IReadOnlyList<ReadingSessionHistoryResponse>>(StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<ReadingSessionHistoryResponse>>> GetRecent(
+        CancellationToken cancellationToken)
+    {
+        var sessions = await dbContext.ReadingSessions
+            .AsNoTracking()
+            .OrderByDescending(session => session.CompletedAtUtc)
+            .ThenByDescending(session => session.Id)
+            .Take(RecentSessionLimit)
+            .Select(session => new ReadingSessionHistoryResponse(
+                session.Id,
+                session.CompletedAtUtc,
+                session.StoryId,
+                session.StoryTitleSnapshot,
+                session.ElapsedSeconds,
+                session.BeforeNotes,
+                session.AfterNotes,
+                session.ChildObservations
+                    .OrderBy(observation => observation.DisplayOrder)
+                    .Select(observation => new ReadingSessionChildObservationResponse(
+                        observation.ChildId,
+                        observation.ChildNameSnapshot,
+                        observation.BeforeCalmness,
+                        observation.AfterCalmness,
+                        observation.DisplayOrder))
+                    .ToList()))
+            .ToListAsync(cancellationToken);
+
+        return Ok(sessions);
+    }
+
     [HttpPost]
     [EndpointSummary("Save a completed reading session")]
     [EndpointDescription("Saves one completed session and snapshots persisted story and child names.")]
@@ -122,3 +158,20 @@ public sealed record CreateReadingSessionResponse(
     DateTime SavedAtUtc,
     string StoryTitle,
     int ElapsedSeconds);
+
+public sealed record ReadingSessionHistoryResponse(
+    int SessionId,
+    DateTime CompletedAtUtc,
+    int StoryId,
+    string StoryTitle,
+    int ElapsedSeconds,
+    string? BeforeNotes,
+    string? AfterNotes,
+    IReadOnlyList<ReadingSessionChildObservationResponse> ChildObservations);
+
+public sealed record ReadingSessionChildObservationResponse(
+    int ChildId,
+    string ChildName,
+    int BeforeCalmness,
+    int AfterCalmness,
+    int DisplayOrder);

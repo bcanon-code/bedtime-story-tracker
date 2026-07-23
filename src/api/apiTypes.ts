@@ -33,3 +33,22 @@ export interface CreateReadingSessionResponse {
   storyTitle: string;
   elapsedSeconds: number;
 }
+
+export interface ReadingSessionChildObservationDto {
+  childId: number;
+  childName: string;
+  beforeCalmness: number;
+  afterCalmness: number;
+  displayOrder: number;
+}
+
+export interface ReadingSessionHistoryDto {
+  sessionId: number;
+  completedAtUtc: string;
+  storyId: number;
+  storyTitle: string;
+  elapsedSeconds: number;
+  beforeNotes: string | null;
+  afterNotes: string | null;
+  childObservations: ReadingSessionChildObservationDto[];
+}
