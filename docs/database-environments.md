@@ -7,9 +7,9 @@ environment file for local work, and deployment environment variables.
 
 | Environment | Database | Schema updates | Demo seed data | OpenAPI/Scalar |
 | --- | --- | --- | --- | --- |
-| Development | `BedtimeStoryTrackerDevelopment` | Applied at startup | Idempotently inserted | Enabled |
-| Demo | `BedtimeStoryTrackerDemo` | Applied at startup | Idempotently inserted | Enabled |
-| Production | `BedtimeStoryTrackerProduction` | External deployment step | Never inserted | Disabled |
+| Development | `BedtimeStoryTracker_Dev` | Applied at startup | Idempotently inserted | Enabled |
+| Demo | `BedtimeStoryTracker_Demo` | Applied at startup | Idempotently inserted | Enabled |
+| Production | `BedtimeStoryTracker_Prod` | External deployment step | Never inserted | Disabled |
 
 The API compares the connection string's database name with
 `DatabaseManagement:ExpectedDatabaseName` and refuses to start on a mismatch.
@@ -21,7 +21,7 @@ credentials, network controls, backups, and least-privilege permissions.
 
 IDE launch profiles use `ASPNETCORE_ENVIRONMENT=Development`. The tracked local
 connection uses Windows authentication and targets only
-`BedtimeStoryTrackerDevelopment`. Startup migration and fictional-data seeding
+`BedtimeStoryTracker_Dev`. Startup migration and fictional-data seeding
 favor fast developer iteration.
 
 Reset it explicitly with:
@@ -34,7 +34,7 @@ Reset it explicitly with:
 
 The interview launcher and trusted-local-server Compose deployment use
 `ASPNETCORE_ENVIRONMENT=Demo`. Local Demo targets only
-`BedtimeStoryTrackerDemo`; Compose overrides its connection string from the
+`BedtimeStoryTracker_Demo`; Compose overrides its connection string from the
 ignored `.env.server`.
 
 Reset the local Demo database with:
@@ -57,7 +57,7 @@ ConnectionStrings__ApplicationDatabase=<production SQL Server connection>
 FrontendOrigin=https://<production-frontend>
 ```
 
-The production connection must target `BedtimeStoryTrackerProduction`. Use a
+The production connection must target `BedtimeStoryTracker_Prod`. Use a
 dedicated application login with only the permissions required at runtime. Use a
 separate, short-lived deployment identity to apply reviewed migrations before
 starting the new application version; the runtime process does not migrate or
@@ -71,7 +71,7 @@ Generate a reviewable migration script from the repository:
 dotnet ef migrations script --idempotent `
   --project src\BedtimeStoryTracker.Api\BedtimeStoryTracker.Api.csproj `
   --startup-project src\BedtimeStoryTracker.Api\BedtimeStoryTracker.Api.csproj `
-  --output artifacts\BedtimeStoryTrackerProduction.sql
+  --output artifacts\BedtimeStoryTracker_Prod.sql
 ```
 
 Review and execute that artifact through the approved production deployment

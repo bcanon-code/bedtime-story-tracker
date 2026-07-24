@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 import type {
   ChildDto,
   CreateReadingSessionRequest,
@@ -8,8 +10,13 @@ import type {
   StorySummaryDto,
 } from './apiTypes';
 
+const defaultApiBaseUrl =
+  Platform.OS === 'android'
+    ? 'http://10.0.2.2:5076'
+    : 'http://localhost:5076';
+
 const apiBaseUrl = (
-  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://localhost:5076'
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? defaultApiBaseUrl
 ).replace(/\/$/, '');
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

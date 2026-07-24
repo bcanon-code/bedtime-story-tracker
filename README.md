@@ -41,9 +41,23 @@ npm run web
 
 Expo starts the development server and prints the local web URL in the terminal. Open that URL if a browser does not open automatically.
 
+For the standard Android emulator, the app defaults to
+`http://10.0.2.2:5076`, Android's alias for the development machine's loopback
+interface. A physical Android device must use a host address reachable from that
+device:
+
+```powershell
+$env:EXPO_PUBLIC_API_BASE_URL = 'http://<development-machine-lan-ip>:5076'
+npm start
+```
+
+The API must listen on that interface and the firewall must allow the selected
+port before a physical device can connect. Web continues to default to
+`http://localhost:5076`.
+
 ## Run the API
 
-The development connection string in `src/BedtimeStoryTracker.Api/appsettings.Development.json` targets only `BedtimeStoryTrackerDevelopment` on `localhost` using Windows authentication. The interview launcher selects the separate Demo environment and `BedtimeStoryTrackerDemo` database. Verify that server name for your machine before starting:
+The development connection string in `src/BedtimeStoryTracker.Api/appsettings.Development.json` targets only `BedtimeStoryTracker_Dev` on `localhost` using Windows authentication. The interview launcher selects the separate Demo environment and `BedtimeStoryTracker_Demo` database. Verify that server name for your machine before starting:
 
 ```bash
 dotnet run --project src/BedtimeStoryTracker.Api/BedtimeStoryTracker.Api.csproj

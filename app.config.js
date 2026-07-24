@@ -24,6 +24,6 @@ module.exports = {
     name: 'Bedtime Story Tracker',
     slug: 'bedtime-story-tracker',
     version: versionInfo.version,
-    platforms: ['web'],
+    platforms: ['android', 'web'],
   },
 };

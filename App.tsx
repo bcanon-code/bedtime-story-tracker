@@ -5,6 +5,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import {
@@ -18,6 +19,7 @@ import {
 } from './src/components/CalmnessSelector';
 import { SessionSummaryCard } from './src/components/SessionSummaryCard';
 import { CompletedSessionList } from './src/components/CompletedSessionList';
+import { AdminDashboard } from './src/components/AdminDashboard';
 import {
   createReadingSession,
   getChildren,
@@ -39,9 +41,12 @@ interface Child {
 type CalmnessByChild = Partial<Record<Child['id'], CalmnessValue>>;
 type WorkflowStep = 'setup' | 'reading' | 'finished' | 'summary';
 type SaveStatus = 'not-saved' | 'saving' | 'saved' | 'failed';
-type AppView = 'workflow' | 'history';
+type AppView = 'workflow' | 'history' | 'admin';
+
+const desktopBreakpoint = 760;
 
 export default function App() {
+  const { width } = useWindowDimensions();
   const [children, setChildren] = useState<Child[]>([]);
   const [stories, setStories] = useState<StorySummary[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -316,6 +321,8 @@ export default function App() {
             onReturn={() => setAppView('workflow')}
             sessions={completedSessions}
           />
+        ) : appView === 'admin' ? (
+          <AdminDashboard onReturn={() => setAppView('workflow')} />
         ) : isInitialLoading ? (
           <View accessibilityLiveRegion="polite" style={styles.centeredState}>
             <Text style={styles.stateTitle}>Loading bedtime data…</Text>
@@ -499,6 +506,20 @@ export default function App() {
               >
                 <Text style={styles.historyButtonText}>Completed sessions</Text>
               </Pressable>
+              {width >= desktopBreakpoint ? (
+                <Pressable
+                  accessibilityHint="Opens the desktop reference-data review workspace"
+                  accessibilityLabel="Open administration"
+                  accessibilityRole="button"
+                  onPress={() => setAppView('admin')}
+                  style={({ pressed }) => [
+                    styles.adminButton,
+                    pressed && styles.pressedSecondaryButton,
+                  ]}
+                >
+                  <Text style={styles.historyButtonText}>Administration</Text>
+                </Pressable>
+              ) : null}
 
             <View style={styles.checkIn}>
               <Text style={styles.stepLabel}>Step 1 of 2</Text>
@@ -1035,6 +1056,17 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     justifyContent: 'center',
     marginTop: theme.spacing.lg,
+    minHeight: 48,
+    paddingHorizontal: theme.spacing.lg,
+  },
+  adminButton: {
+    alignItems: 'center',
+    alignSelf: 'center',
+    borderColor: theme.colors.border,
+    borderRadius: theme.radius.md,
+    borderWidth: 2,
+    justifyContent: 'center',
+    marginTop: theme.spacing.sm,
     minHeight: 48,
     paddingHorizontal: theme.spacing.lg,
   },

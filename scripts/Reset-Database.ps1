@@ -60,9 +60,9 @@ $apiProject = Join-Path $repositoryRoot 'src\BedtimeStoryTracker.Api\BedtimeStor
 $environmentSettings = Join-Path $repositoryRoot "src\BedtimeStoryTracker.Api\appsettings.$Environment.json"
 $contextName = 'ApplicationDbContext'
 $expectedDatabase = if ($Environment -eq 'Development') {
-    'BedtimeStoryTrackerDevelopment'
+    'BedtimeStoryTracker_Dev'
 } else {
-    'BedtimeStoryTrackerDemo'
+    'BedtimeStoryTracker_Demo'
 }
 $seedVerificationPort = 5077
 
