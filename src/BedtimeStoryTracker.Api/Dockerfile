@@ -47,6 +47,7 @@ EXPOSE 8080
 USER app
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
-    CMD curl --fail --silent --show-error http://127.0.0.1:8080/health > /dev/null || exit 1
+    CMD curl --fail --silent --show-error http://127.0.0.1:8080/health \
+        | grep --quiet '"status":"ok"' || exit 1
 
 ENTRYPOINT ["dotnet", "BedtimeStoryTracker.Api.dll"]

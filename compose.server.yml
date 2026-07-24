@@ -13,7 +13,7 @@ services:
         BUILD_DATE: ${BUILD_DATE:-unknown}
         OCI_SOURCE: ${OCI_SOURCE:-unknown}
     environment:
-      ASPNETCORE_ENVIRONMENT: Demo
+      ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: "8080"
       ConnectionStrings__ApplicationDatabase: ${ConnectionStrings__ApplicationDatabase:?Set the SQL Server connection string}
       FrontendOrigin: ${FRONTEND_ORIGIN:?Set FRONTEND_ORIGIN}
@@ -27,7 +27,7 @@ services:
       - "${SERVER_BIND_ADDRESS:?Set SERVER_BIND_ADDRESS}:${API_PORT:?Set API_PORT}:8080"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/health"]
+      test: ["CMD-SHELL", "curl --fail --silent --show-error http://127.0.0.1:8080/health | grep --quiet '\"status\":\"ok\"'"]
       interval: 30s
       timeout: 5s
       retries: 5

@@ -57,6 +57,9 @@ $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Pat
 $composeFile = Join-Path $repositoryRoot 'compose.server.yml'
 $versionFile = Join-Path $repositoryRoot 'version.json'
 $portCheckScript = Join-Path $PSScriptRoot 'Test-DockerPortBlock.ps1'
+$preflightScript = Join-Path $PSScriptRoot 'Test-ServerDeployment.ps1'
+$diagnosticsScript = Join-Path $PSScriptRoot 'Collect-DockerDiagnostics.ps1'
+$deploymentStarted = $false
 $environmentPath = if ([IO.Path]::IsPathRooted($EnvironmentFile)) {
     $EnvironmentFile
 } else {
@@ -68,12 +71,15 @@ Assert-Command -Name 'docker'
 
 Push-Location $repositoryRoot
 try {
-    Invoke-NativeCommand -Command 'docker' -Arguments @('compose', 'version')
-
     $workingTree = (& git status --porcelain)
     if ($LASTEXITCODE -ne 0) { throw 'Unable to inspect the Git working tree.' }
     if ($workingTree) {
         throw 'The Git working tree is dirty. Commit or stash changes before deployment.'
+    }
+
+    & $preflightScript -EnvironmentFile $environmentPath -ComposeFile $composeFile
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Production deployment preflight failed. No images were built and no containers were recreated.'
     }
 
     $gitSha = (& git rev-parse --short HEAD).Trim()
@@ -190,6 +196,7 @@ try {
     }
 
     Write-Host 'Starting or recreating the server services...' -ForegroundColor Cyan
+    $deploymentStarted = $true
     Invoke-NativeCommand -Command 'docker' -Arguments ($composeArguments + @('up', '-d', '--force-recreate', '--no-build'))
 
     $deadline = (Get-Date).AddSeconds($StartupTimeoutSeconds)
@@ -222,6 +229,10 @@ try {
     $apiUrl = $settings['EXPO_PUBLIC_API_BASE_URL'].TrimEnd('/')
 
     $reported = Invoke-RestMethod -Uri "$apiUrl/version" -Method Get
+    $health = Invoke-RestMethod -Uri "$apiUrl/health" -Method Get
+    if ($health.status -ne 'ok' -or $health.database.status -ne 'connected') {
+        throw 'The deployed API health endpoint did not report a connected database.'
+    }
     Write-Host "Expected: v$appVersion | $($env:BUILD_DATE) | Build $($buildNumber.ToString('000')) | Commit $gitSha | Server"
     Write-Host "Reported: $($reported.displayVersion) | Commit $($reported.gitSha) | $($reported.environment)"
     if ($reported.version -ne $appVersion -or
@@ -242,6 +253,19 @@ try {
         $imageIdentifier = (& docker inspect --format '{{.Image}}' $containerId).Trim()
         Write-Host "$serviceName image: $imageIdentifier (tag $imageTag)"
     }
+}
+catch {
+    Write-Error $_
+    if ($deploymentStarted) {
+        Write-Warning 'Deployment startup failed. Collecting diagnostics before leaving failed containers in place...'
+        try {
+            & $diagnosticsScript -EnvironmentFile $environmentPath -ComposeFile $composeFile
+        }
+        catch {
+            Write-Warning "Automatic diagnostics also failed: $($_.Exception.Message)"
+        }
+    }
+    throw
 }
 finally {
     Pop-Location

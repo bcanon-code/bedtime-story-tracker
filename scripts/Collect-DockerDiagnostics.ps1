@@ -5,7 +5,8 @@ param(
     [string]$ComposeFile = "compose.server.yml",
     [string]$ApiServiceName = "api",
     [string]$FrontendServiceName = "frontend",
-    [int]$LogTail = 300
+    [int]$LogTail = 300,
+    [switch]$IncludeSqlHost
 )
 
 $ErrorActionPreference = "Stop"
@@ -73,9 +74,10 @@ function Protect-Secrets {
 
     $redacted = $Text
     $patterns = @(
-        '(?im)(Password|Pwd|User Id|UserID|UID|AccessToken|ApiKey|Secret|Token)\s*=\s*[^;\r\n]+' ,
+        '(?im)(Password|Pwd|User Id|UserID|UID|AccessToken|ApiKey|Secret|Token)\s*=\s*[^;\r\n,}"'']+' ,
         '(?im)(ConnectionStrings__ApplicationDatabase\s*=\s*).+',
-        '(?im)(ConnectionStrings:ApplicationDatabase\s*=\s*).+'
+        '(?im)(ConnectionStrings:ApplicationDatabase\s*=\s*).+',
+        '(?im)("?ConnectionStrings__ApplicationDatabase"?\s*:\s*").*?(")'
     )
 
     foreach ($pattern in $patterns) {
@@ -91,6 +93,34 @@ function Protect-Secrets {
     }
 
     return $redacted
+}
+
+function Get-EnvironmentMap {
+    param([string]$Path)
+    $map = @{}
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith('#') -or -not $trimmed.Contains('=')) { continue }
+        $name, $value = $trimmed.Split('=', 2)
+        $map[$name.Trim()] = $value.Trim()
+    }
+    return $map
+}
+
+function Get-SqlFailureCategory {
+    param([string]$Text)
+    switch -Regex ($Text) {
+        'CREATE DATABASE permission denied' { return 'CREATE DATABASE denied' }
+        'Cannot open database .* requested by the login|Error Number:4060' { return 'Database does not exist or login not mapped to database' }
+        'Login failed for user|Error Number:18456' { return 'SQL login authentication failure' }
+        'permission.*CONNECT|CONNECT permission denied' { return 'Login lacks CONNECT permission' }
+        'permission was denied|ALTER TABLE|CREATE TABLE|CREATE SCHEMA' { return 'Login lacks schema or migration permission' }
+        'certificate|SSL|TLS|trust chain' { return 'TLS or certificate failure' }
+        'No such host|Name or service not known|could not resolve' { return 'DNS resolution failure' }
+        'timed out|actively refused|network-related|TCP Provider' { return 'TCP port unreachable' }
+        '__EFMigrationsHistory|migration.*failed|MigrateAsync' { return 'EF migration failure' }
+        default { return 'unknown database error' }
+    }
 }
 
 function Save-Redacted {
@@ -131,6 +161,15 @@ foreach ($requiredCommand in @("docker", "git")) {
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $outputRoot = Join-Path $RepositoryRoot "diagnostics\docker-$timestamp"
 New-Item -ItemType Directory -Path $outputRoot -Force | Out-Null
+
+$versionData = Get-Content -Raw -LiteralPath (Join-Path $RepositoryRoot 'version.json') | ConvertFrom-Json
+$gitSha = (& git rev-parse --short HEAD).Trim()
+$env:APP_VERSION = [string]$versionData.version
+$env:BUILD_NUMBER = [string]$versionData.build
+$env:GIT_SHA = $gitSha
+$env:IMAGE_TAG = "$($versionData.version)-build.$(([int]$versionData.build).ToString('000'))-$gitSha".ToLowerInvariant()
+$env:BUILD_DATE = 'diagnostics'
+$env:OCI_SOURCE = 'diagnostics'
 
 $composeArgs = @(
     "compose",
@@ -199,7 +238,7 @@ foreach ($service in @($ApiServiceName, $FrontendServiceName)) {
 }
 
 foreach ($service in @($ApiServiceName, $FrontendServiceName)) {
-    $containerId = docker @composeArgs ps -q $service 2>$null | Select-Object -First 1
+    $containerId = docker @composeArgs ps -a -q $service 2>$null | Select-Object -First 1
     $safeService = $service -replace '[^A-Za-z0-9_.-]', '_'
 
     if ([string]::IsNullOrWhiteSpace($containerId)) {
@@ -221,7 +260,7 @@ foreach ($service in @($ApiServiceName, $FrontendServiceName)) {
     $results.Add((Invoke-Captured "docker inspect image $service" { docker inspect $containerId --format 'Image={{.Config.Image}} ImageId={{.Image}}' } (Join-Path $outputRoot "17-image-$safeService.txt")))
 }
 
-$apiContainerId = docker @composeArgs ps -q $ApiServiceName 2>$null | Select-Object -First 1
+$apiContainerId = docker @composeArgs ps -a -q $ApiServiceName 2>$null | Select-Object -First 1
 
 if (-not [string]::IsNullOrWhiteSpace($apiContainerId)) {
     $results.Add((Invoke-Captured "API process list" { docker exec $apiContainerId sh -c 'ps aux || ps -ef' } (Join-Path $outputRoot "18-api-processes.txt")))
@@ -263,13 +302,14 @@ if (-not [string]::IsNullOrWhiteSpace($apiContainerId)) {
                 $sqlPort = [int]$matches.port
             }
 
+            $displaySqlHost = if ($IncludeSqlHost) { $sqlHost } else { '<SQL_HOST>' }
             @(
-                "DetectedSqlHost=$sqlHost"
+                "DetectedSqlHost=$displaySqlHost"
                 "DetectedSqlPort=$sqlPort"
                 "ConnectionStringValue=<REDACTED>"
             ) | Out-File (Join-Path $outputRoot "24-sql-target-redacted.txt") -Encoding utf8
 
-            $results.Add((Invoke-Captured "API SQL TCP reachability $sqlHost`:$sqlPort" {
+            $results.Add((Invoke-Captured "API SQL TCP reachability $displaySqlHost`:$sqlPort" {
                         docker exec $apiContainerId sh -c "if command -v nc >/dev/null; then nc -vz -w 5 '$sqlHost' '$sqlPort'; elif command -v bash >/dev/null; then timeout 5 bash -c '</dev/tcp/$sqlHost/$sqlPort'; else echo 'No nc or bash TCP test available'; fi"
                     } (Join-Path $outputRoot "25-api-sql-tcp-reachability.txt")))
         }
@@ -282,16 +322,105 @@ if (-not [string]::IsNullOrWhiteSpace($apiContainerId)) {
     }
 }
 
-$envMap = @{}
-foreach ($line in Get-Content $resolvedEnvironmentFile) {
-    $trimmed = $line.Trim()
+$envMap = Get-EnvironmentMap $resolvedEnvironmentFile
 
-    if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith("#") -or -not $trimmed.Contains("=")) {
-        continue
+$sqlSummary = [ordered]@{
+    Dns = 'NOT TESTED'
+    Tcp = 'NOT TESTED'
+    Authentication = 'NOT TESTED'
+    ProductionDatabaseExists = 'NOT TESTED'
+    DatabaseExists = 'NOT TESTED'
+    UserMapping = 'NOT TESTED'
+    Permissions = 'NOT TESTED'
+    Migrations = 'NOT TESTED'
+    Category = 'unknown database error'
+}
+
+if ($envMap.ContainsKey('ConnectionStrings__ApplicationDatabase')) {
+    $sqlBuilder = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
+    try {
+        $sqlBuilder.set_ConnectionString($envMap['ConnectionStrings__ApplicationDatabase'])
+        $targetDatabase = $sqlBuilder.InitialCatalog
+        $masterBuilder = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
+        $masterBuilder.set_ConnectionString($sqlBuilder.ConnectionString)
+        $masterBuilder.InitialCatalog = 'master'
+        $masterBuilder.ConnectTimeout = 5
+        $masterConnection = New-Object System.Data.SqlClient.SqlConnection($masterBuilder.ConnectionString)
+        try {
+            $masterConnection.Open()
+            $sqlSummary.Authentication = 'PASS'
+            $command = $masterConnection.CreateCommand()
+            $command.CommandText = 'SELECT CASE WHEN DB_ID(@database) IS NULL THEN 0 ELSE 1 END'
+            [void]$command.Parameters.Add('@database', [Data.SqlDbType]::NVarChar, 128)
+            $command.Parameters['@database'].Value = $targetDatabase
+            $databaseExists = [int]$command.ExecuteScalar() -eq 1
+            $sqlSummary.DatabaseExists = if ($databaseExists) { 'PASS' } else { 'FAIL' }
+            if (-not $databaseExists) {
+                $sqlSummary.Category = 'Database does not exist'
+            }
+        }
+        finally {
+            $masterConnection.Dispose()
+        }
+
+        if ($databaseExists) {
+            $sqlBuilder.ConnectTimeout = 5
+            $databaseConnection = New-Object System.Data.SqlClient.SqlConnection($sqlBuilder.ConnectionString)
+            try {
+                $databaseConnection.Open()
+                $command = $databaseConnection.CreateCommand()
+                $command.CommandText = @'
+SELECT
+  CASE WHEN DATABASE_PRINCIPAL_ID() IS NULL THEN 0 ELSE 1 END AS IsMapped,
+  HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'CONNECT') AS CanConnect,
+  HAS_PERMS_BY_NAME('dbo', 'SCHEMA', 'ALTER') AS CanAlterDbo,
+  HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'CREATE TABLE') AS CanCreateTable,
+  HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'SELECT') AS CanSelect,
+  HAS_PERMS_BY_NAME(DB_NAME(), 'DATABASE', 'INSERT') AS CanInsert,
+  CASE WHEN OBJECT_ID(N'__EFMigrationsHistory', N'U') IS NULL THEN 0 ELSE 1 END AS HasMigrationHistory
+'@
+                $reader = $command.ExecuteReader()
+                [void]$reader.Read()
+                $mapped = $reader.GetInt32(0) -eq 1
+                $canConnect = $reader.GetInt32(1) -eq 1
+                $canMigrate = ($reader.GetInt32(2) -eq 1) -and ($reader.GetInt32(3) -eq 1)
+                $canUseApp = ($reader.GetInt32(4) -eq 1) -and ($reader.GetInt32(5) -eq 1)
+                $hasHistory = $reader.GetInt32(6) -eq 1
+                $reader.Close()
+                $sqlSummary.UserMapping = if ($mapped) { 'PASS' } else { 'FAIL' }
+                $sqlSummary.Permissions = if ($canConnect -and $canUseApp) { 'PASS' } else { 'FAIL' }
+                $sqlSummary.Migrations = if ($hasHistory) { 'PASS' } else { 'FAIL' }
+                if (-not $mapped) { $sqlSummary.Category = 'Login not mapped to database' }
+                elseif (-not $canConnect) { $sqlSummary.Category = 'Login lacks CONNECT permission' }
+                elseif (-not $canUseApp) { $sqlSummary.Category = 'application query failure' }
+                elseif (-not $canMigrate) { $sqlSummary.Category = 'Login lacks schema or migration permission' }
+                elseif (-not $hasHistory) { $sqlSummary.Category = 'migration history mismatch' }
+                else { $sqlSummary.Category = 'none' }
+            }
+            finally {
+                $databaseConnection.Dispose()
+            }
+        }
     }
-
-    $name, $value = $trimmed.Split("=", 2)
-    $envMap[$name.Trim()] = $value.Trim()
+    catch {
+        $safeError = Protect-Secrets $_.Exception.Message
+        $sqlSummary.Category = Get-SqlFailureCategory $safeError
+        if ($sqlSummary.Authentication -eq 'NOT TESTED') { $sqlSummary.Authentication = 'FAIL' }
+        "Category=$($sqlSummary.Category)`nMessage=$safeError" |
+            Out-File (Join-Path $outputRoot '32-sql-login-database-test.txt') -Encoding utf8
+    }
+    @(
+        "Provider=SQL Server"
+        "Database=$($sqlBuilder.InitialCatalog)"
+        "Authentication=$($sqlSummary.Authentication)"
+        "DatabaseExists=$($sqlSummary.DatabaseExists)"
+        "UserMapping=$($sqlSummary.UserMapping)"
+        "Permissions=$($sqlSummary.Permissions)"
+        "Migrations=$($sqlSummary.Migrations)"
+        "Category=$($sqlSummary.Category)"
+        'UserId=<REDACTED>'
+        'ConnectionString=<REDACTED>'
+    ) | Out-File (Join-Path $outputRoot '32-sql-login-database-test.txt') -Encoding utf8
 }
 
 $serverHost = if ($envMap.ContainsKey("SERVER_HOST")) { $envMap["SERVER_HOST"] } else { "localhost" }
@@ -309,9 +438,14 @@ if ($frontendPort) {
 }
 
 $results.Add((Invoke-Captured "Docker images for Bedtime Story Tracker" { docker images --format 'Repository={{.Repository}} Tag={{.Tag}} ID={{.ID}} Created={{.CreatedSince}} Size={{.Size}}' | Select-String 'bedtime-story-tracker' } (Join-Path $outputRoot "30-project-images.txt")))
+$results.Add((Invoke-Captured "Current EF Core migration list (no database connection)" {
+            dotnet ef migrations list --no-connect `
+                --project (Join-Path $RepositoryRoot 'src\BedtimeStoryTracker.Api\BedtimeStoryTracker.Api.csproj') `
+                --startup-project (Join-Path $RepositoryRoot 'src\BedtimeStoryTracker.Api\BedtimeStoryTracker.Api.csproj')
+        } (Join-Path $outputRoot "30-ef-migrations.txt")))
 
 foreach ($service in @($ApiServiceName, $FrontendServiceName)) {
-    $containerId = docker @composeArgs ps -q $service 2>$null | Select-Object -First 1
+    $containerId = docker @composeArgs ps -a -q $service 2>$null | Select-Object -First 1
 
     if ([string]::IsNullOrWhiteSpace($containerId)) {
         continue
@@ -326,6 +460,102 @@ Select-Object Name, ExitCode, Succeeded, OutputFile |
 Format-Table -AutoSize |
 Out-String |
 Out-File (Join-Path $outputRoot "00-command-summary.txt") -Encoding utf8
+
+$apiLogText = Get-Content -Raw -ErrorAction SilentlyContinue (Join-Path $outputRoot "12-logs-$ApiServiceName.txt")
+$logCategory = if ($apiLogText) { Get-SqlFailureCategory $apiLogText } else { 'unknown database error' }
+if ($sqlSummary.Category -eq 'unknown database error' -and $logCategory -ne 'unknown database error') {
+    $sqlSummary.Category = $logCategory
+}
+$expectedProductionDatabase = (Get-Content -Raw (Join-Path $RepositoryRoot 'src\BedtimeStoryTracker.Api\appsettings.Production.json') | ConvertFrom-Json).DatabaseManagement.ExpectedDatabaseName
+$configuredDatabase = if ($envMap.ContainsKey('ConnectionStrings__ApplicationDatabase')) {
+    $isolationBuilder = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
+    try { $isolationBuilder.set_ConnectionString($envMap['ConnectionStrings__ApplicationDatabase']); $isolationBuilder.InitialCatalog } catch { '' }
+} else { '' }
+$productionIsolation = if ($configuredDatabase -ceq $expectedProductionDatabase) { 'PASS' } else { 'FAIL' }
+
+if ($logCategory -eq 'CREATE DATABASE denied') {
+    # SQL error 262 while EF executes CREATE DATABASE proves DNS, TCP, TLS, and
+    # authentication reached master; the target database was absent.
+    $sqlSummary.Dns = 'PASS'
+    $sqlSummary.Tcp = 'PASS'
+    $sqlSummary.Authentication = 'PASS'
+    $sqlSummary.DatabaseExists = 'NOT TESTED'
+    $sqlSummary.UserMapping = 'NOT TESTED'
+    $sqlSummary.Permissions = 'NOT TESTED'
+    $sqlSummary.Migrations = 'NOT TESTED'
+    $sqlSummary.Category = 'CREATE DATABASE denied'
+}
+
+# Prefer installed sqlcmd for authoritative, read-only existence/access checks.
+# SQLCMDPASSWORD keeps the password out of arguments and all error text is
+# suppressed because SQL Server commonly includes the login name in failures.
+if ((Get-Command sqlcmd -ErrorAction SilentlyContinue) -and
+    $envMap.ContainsKey('ConnectionStrings__ApplicationDatabase')) {
+    $sqlcmdBuilder = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
+    try {
+        $sqlcmdBuilder.set_ConnectionString($envMap['ConnectionStrings__ApplicationDatabase'])
+        $previousSqlcmdPassword = $env:SQLCMDPASSWORD
+        try {
+            $env:SQLCMDPASSWORD = $sqlcmdBuilder.Password
+            $safeConfiguredDatabase = $sqlcmdBuilder.InitialCatalog.Replace("'", "''")
+            $safeProductionDatabase = ([string]$expectedProductionDatabase).Replace("'", "''")
+            $existenceQuery = "SET NOCOUNT ON; SELECT CASE WHEN DB_ID(N'$safeProductionDatabase') IS NULL THEN 0 ELSE 1 END, CASE WHEN DB_ID(N'$safeConfiguredDatabase') IS NULL THEN 0 ELSE 1 END;"
+            $existenceOutput = & sqlcmd -S $sqlcmdBuilder.DataSource -U $sqlcmdBuilder.UserID -d master -C -l 5 -b -h -1 -W -Q $existenceQuery 2>$null
+            if ($LASTEXITCODE -eq 0 -and ($existenceOutput -join ' ') -match '^\s*([01])\s+([01])\s*$') {
+                $sqlSummary.Authentication = 'PASS'
+                $sqlSummary.ProductionDatabaseExists = if ($Matches[1] -eq '1') { 'PASS' } else { 'FAIL' }
+                $sqlSummary.DatabaseExists = if ($Matches[2] -eq '1') { 'PASS' } else { 'FAIL' }
+            }
+            if ($sqlSummary.DatabaseExists -eq 'PASS') {
+                $null = & sqlcmd -S $sqlcmdBuilder.DataSource -U $sqlcmdBuilder.UserID -d $sqlcmdBuilder.InitialCatalog -C -l 5 -b -h -1 -W -Q 'SET NOCOUNT ON; SELECT 1;' 2>$null
+                if ($LASTEXITCODE -ne 0) {
+                    $sqlSummary.UserMapping = 'FAIL'
+                    $sqlSummary.Permissions = 'NOT TESTED'
+                    $sqlSummary.Migrations = 'NOT TESTED'
+                    $sqlSummary.Category = 'Login not mapped to database or lacks CONNECT permission'
+                }
+            }
+        }
+        finally {
+            $env:SQLCMDPASSWORD = $previousSqlcmdPassword
+        }
+    }
+    catch {
+        # Earlier evidence remains authoritative when optional sqlcmd probing is unavailable.
+    }
+}
+$apiState = if ($apiContainerId) {
+    (& docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $apiContainerId 2>$null)
+} else { 'NOT FOUND' }
+$summaryLines = @(
+    'Docker: PASS'
+    'Compose: PASS'
+    'Environment file: PASS'
+    "Production database isolation: $productionIsolation"
+    "SQL DNS: $($sqlSummary.Dns)"
+    "SQL TCP: $($sqlSummary.Tcp)"
+    "SQL authentication: $($sqlSummary.Authentication)"
+    "Production database exists: $($sqlSummary.ProductionDatabaseExists)"
+    "Configured database exists: $($sqlSummary.DatabaseExists)"
+    "Database user mapping: $($sqlSummary.UserMapping)"
+    "Database permissions: $($sqlSummary.Permissions)"
+    "EF migrations: $($sqlSummary.Migrations)"
+    "API container: $($apiState.ToString().ToUpperInvariant())"
+    ''
+    'Likely root cause:'
+    $sqlSummary.Category
+    ''
+    'Recommended action:'
+    $(if ($sqlSummary.ProductionDatabaseExists -eq 'FAIL') {
+        'Create the repository-defined production database once with an administrator account, map the runtime login with least privilege, update .env.server to that database, then rerun preflight. Do not grant sysadmin or dbcreator.'
+    } elseif ($sqlSummary.Category -in @('Database does not exist', 'CREATE DATABASE denied', 'Login not mapped to database or lacks CONNECT permission')) {
+        'Have an administrator map the runtime login to the existing configured database with least privilege, then rerun preflight. Do not grant sysadmin or dbcreator.'
+    } else {
+        'Follow the categorized failure, correct only that prerequisite, then rerun preflight and deployment.'
+    })
+)
+$summaryLines | Out-File (Join-Path $outputRoot '00-diagnostic-summary.txt') -Encoding utf8
+$summaryLines | ForEach-Object { Write-Host $_ }
 
 $sourceFolder = Join-Path $outputRoot "source-snapshots"
 New-Item -ItemType Directory -Path $sourceFolder -Force | Out-Null
@@ -367,6 +597,17 @@ if (Test-Path $zipPath) {
 }
 
 Compress-Archive -Path (Join-Path $outputRoot "*") -DestinationPath $zipPath -CompressionLevel Optimal
+
+$secretPattern = '(?i)(Password|Pwd|User\s*Id|UID|Token|Secret)\s*=|Server\s*=.+;\s*(Database|Initial Catalog)\s*=.+;'
+$secretHits = @(Get-ChildItem $outputRoot -File -Recurse |
+    Select-String -Pattern $secretPattern |
+    Where-Object { $_.Line -notmatch '<REDACTED>' })
+if ($secretHits.Count -gt 0) {
+    Write-Warning "Secret scan found $($secretHits.Count) potentially unredacted line(s). Review the folder and do not share the ZIP."
+}
+else {
+    Write-Host 'Secret scan: PASS (no unredacted connection-string fragments or sensitive assignments detected).' -ForegroundColor Green
+}
 
 Write-Section "Diagnostics Complete"
 Write-Host "Folder:"
