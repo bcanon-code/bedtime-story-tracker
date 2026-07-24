@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 
 import type {
   ChildDto,
+  ChildWriteRequest,
   CreateReadingSessionRequest,
   CreateReadingSessionResponse,
   HealthResponse,
@@ -31,7 +32,10 @@ const hasNumber = (value: Record<string, unknown>, key: string) =>
   typeof value[key] === 'number';
 
 const isChildDto = (value: unknown): value is ChildDto =>
-  isRecord(value) && hasNumber(value, 'id') && hasString(value, 'name');
+  isRecord(value) &&
+  hasNumber(value, 'id') &&
+  hasString(value, 'name') &&
+  hasNumber(value, 'displayOrder');
 
 const isStorySummaryDto = (value: unknown): value is StorySummaryDto =>
   isRecord(value) &&
@@ -115,6 +119,7 @@ const isCreateReadingSessionResponse = (
 interface ProblemDetails {
   title?: string;
   detail?: string;
+  errors?: Record<string, string[]>;
 }
 
 async function readProblemDetails(response: Response): Promise<ProblemDetails> {
@@ -127,9 +132,106 @@ async function readProblemDetails(response: Response): Promise<ProblemDetails> {
     return {
       title: typeof data.title === 'string' ? data.title : undefined,
       detail: typeof data.detail === 'string' ? data.detail : undefined,
+      errors:
+        isRecord(data.errors)
+          ? Object.fromEntries(
+              Object.entries(data.errors).filter(
+                (entry): entry is [string, string[]] =>
+                  Array.isArray(entry[1]) &&
+                  entry[1].every((message) => typeof message === 'string'),
+              ),
+            )
+          : undefined,
     };
   } catch {
     return {};
+  }
+}
+
+export class ChildApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number | null,
+    readonly fieldErrors: Record<string, string[]> = {},
+  ) {
+    super(message);
+    this.name = 'ChildApiError';
+  }
+}
+
+async function mutateChild(
+  path: string,
+  method: 'POST' | 'PUT',
+  request: ChildWriteRequest,
+): Promise<ChildDto> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+  } catch (error: unknown) {
+    throw new ChildApiError(
+      'The bedtime API could not be reached. Check that it is running, then retry.',
+      null,
+      {},
+    );
+  }
+
+  if (!response.ok) {
+    const problem = await readProblemDetails(response);
+    throw new ChildApiError(
+      response.status === 400
+        ? 'Review the highlighted fields and try again.'
+        : response.status === 404
+          ? 'This child is no longer available. Refresh the catalog and try again.'
+          : problem.detail ?? 'The child change could not be saved. Please retry.',
+      response.status,
+      problem.errors,
+    );
+  }
+
+  const data: unknown = await response.json();
+  if (!isChildDto(data)) {
+    throw new ChildApiError('The bedtime API returned an invalid child response.', response.status);
+  }
+
+  return data;
+}
+
+export function createChild(request: ChildWriteRequest): Promise<ChildDto> {
+  return mutateChild('/api/children', 'POST', request);
+}
+
+export function updateChild(id: number, request: ChildWriteRequest): Promise<ChildDto> {
+  return mutateChild(`/api/children/${encodeURIComponent(id)}`, 'PUT', request);
+}
+
+export async function deleteChild(id: number): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}/api/children/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  } catch (error: unknown) {
+    throw new ChildApiError(
+      'The bedtime API could not be reached. Check that it is running, then retry.',
+      null,
+      {},
+    );
+  }
+
+  if (!response.ok) {
+    const problem = await readProblemDetails(response);
+    throw new ChildApiError(
+      response.status === 409
+        ? 'This child is used by completed session history and cannot be deleted.'
+        : response.status === 404
+          ? 'This child is no longer available.'
+          : problem.detail ?? 'The child could not be deleted. Please retry.',
+      response.status,
+    );
   }
 }
 

@@ -1,6 +1,12 @@
 export interface ChildDto {
   id: number;
   name: string;
+  displayOrder: number;
+}
+
+export interface ChildWriteRequest {
+  name: string;
+  displayOrder: number;
 }
 
 export interface StorySummaryDto {
