@@ -52,13 +52,13 @@ $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $environmentPath = if ([IO.Path]::IsPathRooted($EnvironmentFile)) { $EnvironmentFile } else { Join-Path $root $EnvironmentFile }
 $composePath = if ([IO.Path]::IsPathRooted($ComposeFile)) { $ComposeFile } else { Join-Path $root $ComposeFile }
 $versionPath = Join-Path $root 'version.json'
-$productionSettingsPath = Join-Path $root 'src\BedtimeStoryTracker.Api\appsettings.Production.json'
-$developmentSettingsPaths = @(
+$testSettingsPath = Join-Path $root 'src\BedtimeStoryTracker.Api\appsettings.Test.json'
+$localSettingsPaths = @(
     (Join-Path $root 'src\BedtimeStoryTracker.Api\appsettings.Development.json'),
     (Join-Path $root 'src\BedtimeStoryTracker.Api\appsettings.Demo.json')
 )
 
-Write-Host 'Bedtime Story Tracker server deployment preflight' -ForegroundColor Cyan
+Write-Host 'Bedtime Story Tracker Docker TEST deployment preflight' -ForegroundColor Cyan
 Write-Host 'No images, containers, databases, or permissions will be changed.'
 
 foreach ($command in @('git', 'docker')) {
@@ -98,20 +98,20 @@ try {
     Add-Result 'Connection string format' FAIL 'Could not be parsed safely.'
 }
 
-$productionSettings = Get-Content -Raw -LiteralPath $productionSettingsPath | ConvertFrom-Json
-$expectedProductionDatabase = [string] $productionSettings.DatabaseManagement.ExpectedDatabaseName
-$knownNonProduction = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-foreach ($path in $developmentSettingsPaths) {
+$testSettings = Get-Content -Raw -LiteralPath $testSettingsPath | ConvertFrom-Json
+$expectedTestDatabase = [string] $testSettings.DatabaseManagement.ExpectedDatabaseName
+$knownLocalDatabases = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($path in $localSettingsPaths) {
     $data = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
-    [void] $knownNonProduction.Add([string] $data.DatabaseManagement.ExpectedDatabaseName)
+    [void] $knownLocalDatabases.Add([string] $data.DatabaseManagement.ExpectedDatabaseName)
 }
 $database = $builder.InitialCatalog
 $databaseIsSafe = -not [string]::IsNullOrWhiteSpace($database) -and
-    -not $knownNonProduction.Contains($database) -and
-    $database -ceq $expectedProductionDatabase -and
+    -not $knownLocalDatabases.Contains($database) -and
+    $database -ceq $expectedTestDatabase -and
     $connectionString -notmatch '(?i)localdb|localhost|127\.0\.0\.1|trusted_connection\s*=\s*true|integrated security\s*=\s*(true|sspi)'
-Add-Result 'Environment' $(if ($databaseIsSafe) { 'PASS' } else { 'FAIL' }) $(if ($databaseIsSafe) { 'Production target is valid.' } else { 'Configured database target is not valid for Production.' })
-Add-Result 'Production database isolation' $(if ($databaseIsSafe) { 'PASS' } else { 'FAIL' }) ("Database: {0}; development/test collision: {1}." -f $(if ($database) { $database } else { '<empty>' }), $(if ($knownNonProduction.Contains($database)) { 'Yes' } else { 'No' }))
+Add-Result 'Environment' $(if ($databaseIsSafe) { 'PASS' } else { 'FAIL' }) $(if ($databaseIsSafe) { 'TEST target is valid.' } else { 'Configured database target is not valid for TEST.' })
+Add-Result 'TEST database isolation' $(if ($databaseIsSafe) { 'PASS' } else { 'FAIL' }) ("Database: {0}; DEV/DEMO collision: {1}." -f $(if ($database) { $database } else { '<empty>' }), $(if ($knownLocalDatabases.Contains($database)) { 'Yes' } else { 'No' }))
 
 $version = $null
 try {

@@ -17,7 +17,7 @@ process.env.EXPO_PUBLIC_APP_VERSION ||= versionInfo.version;
 process.env.EXPO_PUBLIC_BUILD_NUMBER ||= String(versionInfo.build);
 process.env.EXPO_PUBLIC_GIT_SHA ||= gitSha;
 process.env.EXPO_PUBLIC_GIT_DIRTY ||= gitDirty;
-process.env.EXPO_PUBLIC_BUILD_ENVIRONMENT ||= 'Local Development';
+process.env.EXPO_PUBLIC_BUILD_ENVIRONMENT ||= 'DEV';
 
 module.exports = {
   expo: {

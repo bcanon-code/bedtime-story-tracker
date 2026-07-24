@@ -22,13 +22,13 @@ subordinate components; BuildOnly leaves SemVer unchanged. The script only edits
 does not increment anything.
 
 Local Expo runs derive the tracked version and current Git state through
-`app.config.js`, for example `v1.0.0-dev | Local Development | 9472d2f-dirty`.
+`app.config.js`, for example `v1.0.0-dev | DEV | 9472d2f-dirty`.
 Docker builds receive one fixed metadata set from the deployment script. UTC is
 canonical; local time is presentation only. A display can therefore render:
 
 ```text
 v1.4.2 | 2026-06-30 14:35 ET | Build 027
-Commit 73c78f1 | Server
+Commit 73c78f1 | TEST
 ```
 
 The frontend uses public `EXPO_PUBLIC_APP_VERSION`, `BUILD_NUMBER`, `GIT_SHA`,

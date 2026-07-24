@@ -67,7 +67,9 @@ if (applyMigrations || seedDemoData)
     }
 }
 
-if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Demo"))
+if (app.Environment.IsDevelopment() ||
+    app.Environment.IsEnvironment("Demo") ||
+    app.Environment.IsEnvironment("Test"))
 {
     app.MapOpenApi();
     app.MapScalarApiReference();

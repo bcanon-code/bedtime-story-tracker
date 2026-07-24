@@ -30,7 +30,7 @@ public sealed record BuildMetadata(
         DateTimeOffset? builtAtUtc = DateTimeOffset.TryParse(configuration["BuildMetadata:BuiltAtUtc"], out var parsedTime)
             ? parsedTime.ToUniversalTime()
             : null;
-        var environment = configuration["BuildMetadata:Environment"] ?? "Local Development";
+        var environment = configuration["BuildMetadata:Environment"] ?? "DEV";
         return new(version, build, gitSha, gitDirty, builtAtUtc, environment);
     }
 

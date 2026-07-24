@@ -3,7 +3,7 @@
 This guide runs the Expo web export and ASP.NET Core API as versioned Docker
 containers on a trusted local network. SQL Server remains external. This is a
 testing deployment, not production hosting: it uses HTTP, has no authentication,
-and exposes Demo-only Scalar/OpenAPI and startup migrations.
+and uses the isolated TEST environment with Scalar/OpenAPI and startup migrations.
 
 ## Prerequisites and required server facts
 
@@ -66,12 +66,12 @@ that need it.
 
 `Reset-Database.ps1` is intentionally limited to the tracked local Windows-authenticated
 Development and Demo connections; it does not read `.env.server` or reset a remote
-container database. Provision the Docker Demo database and its least-privilege SQL
+container database. Provision the Docker TEST database and its isolated SQL
 login through an approved administrative process, then place only the application
 connection in the ignored `.env.server`. Stop the API container before an
 administrator performs any destructive database maintenance.
 
-In Demo, API startup applies existing EF Core migrations and idempotently
+In Test, API startup applies existing EF Core migrations and idempotently
 seeds missing fictional children and stories. It does not reset the database or
 seed completed sessions. Startup migrations are a demo/testing convenience, not a
 recommended production migration strategy.
@@ -103,7 +103,7 @@ Expected URLs are:
 - OpenAPI document: `http://SERVER_HOST:API_PORT/openapi/v1.json`
 
 Scalar and OpenAPI are intentionally available because the container uses the
-Demo environment for local server testing, migrations, and seeding. Do not
+TEST environment for packaged validation, migrations, and seeding. Do not
 expose them or this unauthenticated API to an untrusted network.
 
 ## Operate and troubleshoot
@@ -139,7 +139,7 @@ Common failures:
 - Migration fails: verify the SQL login can read/write the target database and
   apply the existing migrations.
 - Port already allocated: select unused host ports and update both URLs.
-- Scalar is missing: confirm `ASPNETCORE_ENVIRONMENT=Demo` remains set for
+- Scalar is missing: confirm `ASPNETCORE_ENVIRONMENT=Test` remains set for
   this testing-only Compose deployment.
 
 Firewall changes, reverse proxies, HTTPS termination, certificates, domain setup,
@@ -226,3 +226,6 @@ target server works.
 
 HTTP is acceptable only on a trusted local testing network. This application has
 no authentication and is not production-ready.
+
+For failure categories, redacted diagnostic collection, and direct inspection
+commands, see [`docker-test-troubleshooting.md`](docker-test-troubleshooting.md).

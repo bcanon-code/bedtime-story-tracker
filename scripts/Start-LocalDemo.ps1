@@ -7,6 +7,10 @@ Starts the local API and Expo Web app, then opens both in one Chrome window.
 [CmdletBinding()]
 param(
     [Parameter()]
+    [ValidateSet('DEV', 'DEMO')]
+    [string] $DatabaseEnvironment = 'DEV',
+
+    [Parameter()]
     [ValidateNotNullOrEmpty()]
     [uri] $FrontendUrl = 'http://localhost:8081',
 
@@ -160,12 +164,13 @@ $escapedRepositoryRoot = $repositoryRoot.Replace("'", "''")
 $escapedApiProjectPath = $apiProjectPath.Replace("'", "''")
 $escapedDotnetPath = $dotnetPath.Replace("'", "''")
 $escapedNpmPath = $npmPath.Replace("'", "''")
+$frameworkEnvironment = if ($DatabaseEnvironment -eq 'DEV') { 'Development' } else { 'Demo' }
 
 $apiCommand = @"
 `$ErrorActionPreference = 'Stop'
 Remove-Item Env:ConnectionStrings__ApplicationDatabase -ErrorAction SilentlyContinue
-`$env:ASPNETCORE_ENVIRONMENT = 'Demo'
-`$env:DOTNET_ENVIRONMENT = 'Demo'
+`$env:ASPNETCORE_ENVIRONMENT = '$frameworkEnvironment'
+`$env:DOTNET_ENVIRONMENT = '$frameworkEnvironment'
 Set-Location -LiteralPath '$escapedRepositoryRoot'
 & '$escapedDotnetPath' run --project '$escapedApiProjectPath'
 if (`$LASTEXITCODE -ne 0) { exit `$LASTEXITCODE }
@@ -174,6 +179,7 @@ if (`$LASTEXITCODE -ne 0) { exit `$LASTEXITCODE }
 $frontendCommand = @"
 `$ErrorActionPreference = 'Stop'
 `$env:BROWSER = 'none'
+`$env:EXPO_PUBLIC_BUILD_ENVIRONMENT = '$DatabaseEnvironment'
 Set-Location -LiteralPath '$escapedRepositoryRoot'
 & '$escapedNpmPath' run web
 if (`$LASTEXITCODE -ne 0) { exit `$LASTEXITCODE }
@@ -215,5 +221,5 @@ Start-Process `
         $ScalarUrl.AbsoluteUri
     ) | Out-Null
 
-Write-Host 'Local demo is ready.' -ForegroundColor Green
+Write-Host "Local $DatabaseEnvironment environment is ready." -ForegroundColor Green
 Write-Host 'Close each application window, or press Ctrl+C in it, to stop that application.'

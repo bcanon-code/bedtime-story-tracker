@@ -79,7 +79,7 @@ try {
 
     & $preflightScript -EnvironmentFile $environmentPath -ComposeFile $composeFile
     if ($LASTEXITCODE -ne 0) {
-        throw 'Production deployment preflight failed. No images were built and no containers were recreated.'
+        throw 'TEST Docker deployment preflight failed. No images were built and no containers were recreated.'
     }
 
     $gitSha = (& git rev-parse --short HEAD).Trim()
@@ -233,13 +233,13 @@ try {
     if ($health.status -ne 'ok' -or $health.database.status -ne 'connected') {
         throw 'The deployed API health endpoint did not report a connected database.'
     }
-    Write-Host "Expected: v$appVersion | $($env:BUILD_DATE) | Build $($buildNumber.ToString('000')) | Commit $gitSha | Server"
+    Write-Host "Expected: v$appVersion | $($env:BUILD_DATE) | Build $($buildNumber.ToString('000')) | Commit $gitSha | TEST"
     Write-Host "Reported: $($reported.displayVersion) | Commit $($reported.gitSha) | $($reported.environment)"
     if ($reported.version -ne $appVersion -or
         [int] $reported.build -ne $buildNumber -or
         $reported.gitSha -ne $gitSha -or
         ([DateTimeOffset] $reported.builtAtUtc).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ') -ne $env:BUILD_DATE -or
-        $reported.environment -ne 'Server') {
+        $reported.environment -ne 'TEST') {
         throw 'The running API build metadata does not match the expected deployment identity.'
     }
 

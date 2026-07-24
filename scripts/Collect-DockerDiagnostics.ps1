@@ -328,7 +328,7 @@ $sqlSummary = [ordered]@{
     Dns = 'NOT TESTED'
     Tcp = 'NOT TESTED'
     Authentication = 'NOT TESTED'
-    ProductionDatabaseExists = 'NOT TESTED'
+    TestDatabaseExists = 'NOT TESTED'
     DatabaseExists = 'NOT TESTED'
     UserMapping = 'NOT TESTED'
     Permissions = 'NOT TESTED'
@@ -466,12 +466,12 @@ $logCategory = if ($apiLogText) { Get-SqlFailureCategory $apiLogText } else { 'u
 if ($sqlSummary.Category -eq 'unknown database error' -and $logCategory -ne 'unknown database error') {
     $sqlSummary.Category = $logCategory
 }
-$expectedProductionDatabase = (Get-Content -Raw (Join-Path $RepositoryRoot 'src\BedtimeStoryTracker.Api\appsettings.Production.json') | ConvertFrom-Json).DatabaseManagement.ExpectedDatabaseName
+$expectedTestDatabase = (Get-Content -Raw (Join-Path $RepositoryRoot 'src\BedtimeStoryTracker.Api\appsettings.Test.json') | ConvertFrom-Json).DatabaseManagement.ExpectedDatabaseName
 $configuredDatabase = if ($envMap.ContainsKey('ConnectionStrings__ApplicationDatabase')) {
     $isolationBuilder = New-Object System.Data.SqlClient.SqlConnectionStringBuilder
     try { $isolationBuilder.set_ConnectionString($envMap['ConnectionStrings__ApplicationDatabase']); $isolationBuilder.InitialCatalog } catch { '' }
 } else { '' }
-$productionIsolation = if ($configuredDatabase -ceq $expectedProductionDatabase) { 'PASS' } else { 'FAIL' }
+$testIsolation = if ($configuredDatabase -ceq $expectedTestDatabase) { 'PASS' } else { 'FAIL' }
 
 if ($logCategory -eq 'CREATE DATABASE denied') {
     # SQL error 262 while EF executes CREATE DATABASE proves DNS, TCP, TLS, and
@@ -498,12 +498,12 @@ if ((Get-Command sqlcmd -ErrorAction SilentlyContinue) -and
         try {
             $env:SQLCMDPASSWORD = $sqlcmdBuilder.Password
             $safeConfiguredDatabase = $sqlcmdBuilder.InitialCatalog.Replace("'", "''")
-            $safeProductionDatabase = ([string]$expectedProductionDatabase).Replace("'", "''")
-            $existenceQuery = "SET NOCOUNT ON; SELECT CASE WHEN DB_ID(N'$safeProductionDatabase') IS NULL THEN 0 ELSE 1 END, CASE WHEN DB_ID(N'$safeConfiguredDatabase') IS NULL THEN 0 ELSE 1 END;"
+            $safeTestDatabase = ([string]$expectedTestDatabase).Replace("'", "''")
+            $existenceQuery = "SET NOCOUNT ON; SELECT CASE WHEN DB_ID(N'$safeTestDatabase') IS NULL THEN 0 ELSE 1 END, CASE WHEN DB_ID(N'$safeConfiguredDatabase') IS NULL THEN 0 ELSE 1 END;"
             $existenceOutput = & sqlcmd -S $sqlcmdBuilder.DataSource -U $sqlcmdBuilder.UserID -d master -C -l 5 -b -h -1 -W -Q $existenceQuery 2>$null
             if ($LASTEXITCODE -eq 0 -and ($existenceOutput -join ' ') -match '^\s*([01])\s+([01])\s*$') {
                 $sqlSummary.Authentication = 'PASS'
-                $sqlSummary.ProductionDatabaseExists = if ($Matches[1] -eq '1') { 'PASS' } else { 'FAIL' }
+                $sqlSummary.TestDatabaseExists = if ($Matches[1] -eq '1') { 'PASS' } else { 'FAIL' }
                 $sqlSummary.DatabaseExists = if ($Matches[2] -eq '1') { 'PASS' } else { 'FAIL' }
             }
             if ($sqlSummary.DatabaseExists -eq 'PASS') {
@@ -531,11 +531,11 @@ $summaryLines = @(
     'Docker: PASS'
     'Compose: PASS'
     'Environment file: PASS'
-    "Production database isolation: $productionIsolation"
+    "TEST database isolation: $testIsolation"
     "SQL DNS: $($sqlSummary.Dns)"
     "SQL TCP: $($sqlSummary.Tcp)"
     "SQL authentication: $($sqlSummary.Authentication)"
-    "Production database exists: $($sqlSummary.ProductionDatabaseExists)"
+    "TEST database exists: $($sqlSummary.TestDatabaseExists)"
     "Configured database exists: $($sqlSummary.DatabaseExists)"
     "Database user mapping: $($sqlSummary.UserMapping)"
     "Database permissions: $($sqlSummary.Permissions)"
@@ -546,8 +546,8 @@ $summaryLines = @(
     $sqlSummary.Category
     ''
     'Recommended action:'
-    $(if ($sqlSummary.ProductionDatabaseExists -eq 'FAIL') {
-        'Create the repository-defined production database once with an administrator account, map the runtime login with least privilege, update .env.server to that database, then rerun preflight. Do not grant sysadmin or dbcreator.'
+    $(if ($sqlSummary.TestDatabaseExists -eq 'FAIL') {
+        'Create the repository-defined TEST database or grant the TEST deployment login permission to create it, then rerun preflight. Keep this login and database isolated from DEV and DEMO.'
     } elseif ($sqlSummary.Category -in @('Database does not exist', 'CREATE DATABASE denied', 'Login not mapped to database or lacks CONNECT permission')) {
         'Have an administrator map the runtime login to the existing configured database with least privilege, then rerun preflight. Do not grant sysadmin or dbcreator.'
     } else {

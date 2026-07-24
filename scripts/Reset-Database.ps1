@@ -4,7 +4,7 @@
 param(
     [Parameter()]
     [ValidateSet('Development', 'Demo')]
-    [string] $Environment = 'Demo',
+    [string] $Environment = 'Development',
 
     [Parameter()]
     [switch] $Force,

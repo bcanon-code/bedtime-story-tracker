@@ -57,7 +57,7 @@ port before a physical device can connect. Web continues to default to
 
 ## Run the API
 
-The development connection string in `src/BedtimeStoryTracker.Api/appsettings.Development.json` targets only `BedtimeStoryTracker_Dev` on `localhost` using Windows authentication. The interview launcher selects the separate Demo environment and `BedtimeStoryTracker_Demo` database. Verify that server name for your machine before starting:
+The development connection string in `src/BedtimeStoryTracker.Api/appsettings.Development.json` targets only `BedtimeStoryTracker_Dev` on `localhost` using Windows authentication. DEV is the local default; DEMO is an explicit opt-in that selects `BedtimeStoryTracker_Demo`. Verify that server name for your machine before starting:
 
 ```bash
 dotnet run --project src/BedtimeStoryTracker.Api/BedtimeStoryTracker.Api.csproj
@@ -73,22 +73,29 @@ connection, apply migrations, and verify fictional seed data:
 ```
 
 Use `-Environment Development` to reset the separate local development database.
-The script rejects Production and requires exact database-name confirmation unless
+The script accepts only local Development or Demo and requires exact database-name confirmation unless
 `-Force` is explicitly supplied. Docker credentials remain in the ignored
 `.env.server` file and are not used by this local reset command.
 
-To launch the API and Expo Web together and open the frontend and Scalar in Chrome:
+To launch the API and Expo Web together in the default DEV environment:
 
 ```powershell
 .\scripts\Start-LocalDemo.ps1
 ```
 
-Development, Demo, and Production database isolation, migration behavior, and
+Use `.\scripts\Start-LocalDemo.ps1 -DatabaseEnvironment DEMO` to opt into the
+preserved local demonstration database.
+
+DEV, DEMO, and TEST database isolation, migration behavior, and
 secret-handling rules are documented in
 [`docs/database-environments.md`](docs/database-environments.md).
 
-For a versioned Docker deployment on a trusted local testing server, see
+Docker Compose explicitly uses TEST and `BedtimeStoryTracker_Test`. Production is
+deferred to a future Azure-hosted environment and is not implemented in Docker.
+For a versioned Docker TEST deployment on a trusted local testing server, see
 [`docs/server-deployment.md`](docs/server-deployment.md).
+Docker-specific failure diagnostics are in
+[`docs/docker-test-troubleshooting.md`](docs/docker-test-troubleshooting.md).
 The shared release identity and explicit bump workflow are documented in
 [`docs/versioning.md`](docs/versioning.md).
 The shared host-port allocation convention is documented in

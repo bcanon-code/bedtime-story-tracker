@@ -1,91 +1,75 @@
-# SQL Server environment isolation
+# Database environments
 
-The API uses one EF Core SQL Server model and three physically separate databases.
-Environment selection follows standard ASP.NET Core configuration precedence:
-`appsettings.json`, `appsettings.{Environment}.json`, user secrets or an ignored
-environment file for local work, and deployment environment variables.
+The application uses three isolated SQL Server databases. Production is a future
+Azure-hosted environment and is not implemented by this repository.
 
-| Environment | Database | Schema updates | Demo seed data | OpenAPI/Scalar |
-| --- | --- | --- | --- | --- |
-| Development | `BedtimeStoryTracker_Dev` | Applied at startup | Idempotently inserted | Enabled |
-| Demo | `BedtimeStoryTracker_Demo` | Applied at startup | Idempotently inserted | Enabled |
-| Production | `BedtimeStoryTracker_Prod` | External deployment step | Never inserted | Disabled |
+| Logical environment | ASP.NET Core environment | Database | Used by |
+| --- | --- | --- | --- |
+| DEV | `Development` | `BedtimeStoryTracker_Dev` | Default local development |
+| DEMO | `Demo` | `BedtimeStoryTracker_Demo` | Optional local rehearsal |
+| TEST | `Test` | `BedtimeStoryTracker_Test` | Docker Compose validation |
 
-The API compares the connection string's database name with
-`DatabaseManagement:ExpectedDatabaseName` and refuses to start on a mismatch.
-This guard reduces the risk of running a Development or Demo process against
-Production. It is an additional check, not a replacement for separate SQL
-credentials, network controls, backups, and least-privilege permissions.
+The API refuses to start when the configured connection string's database name
+does not exactly match `DatabaseManagement:ExpectedDatabaseName`. This protects
+against DEV, DEMO, and TEST collisions.
 
-## Development
+## Local DEV and DEMO
 
-IDE launch profiles use `ASPNETCORE_ENVIRONMENT=Development`. The tracked local
-connection uses Windows authentication and targets only
-`BedtimeStoryTracker_Dev`. Startup migration and fictional-data seeding
-favor fast developer iteration.
+DEV is the safe default:
 
-Reset it explicitly with:
+```powershell
+.\scripts\Start-LocalDemo.ps1
+# Equivalent:
+.\scripts\Start-LocalDemo.ps1 -DatabaseEnvironment DEV
+```
+
+Select the preserved demonstration database explicitly:
+
+```powershell
+.\scripts\Start-LocalDemo.ps1 -DatabaseEnvironment DEMO
+```
+
+The launcher maps DEV to ASP.NET Core `Development` and DEMO to `Demo`, clears
+any inherited connection-string override, and labels frontend build diagnostics
+with the selected logical environment. Both local environments apply migrations
+and idempotently insert missing fictional catalog data at API startup.
+
+Reset commands remain local-only and require an exact database-name confirmation:
 
 ```powershell
 .\scripts\Reset-Database.ps1 -Environment Development
-```
-
-## Demo
-
-The interview launcher and trusted-local-server Compose deployment use
-`ASPNETCORE_ENVIRONMENT=Demo`. Local Demo targets only
-`BedtimeStoryTracker_Demo`; Compose overrides its connection string from the
-ignored `.env.server`.
-
-Reset the local Demo database with:
-
-```powershell
 .\scripts\Reset-Database.ps1 -Environment Demo
 ```
 
-Demo startup applies existing migrations and inserts missing fictional catalog
-data. Do not use Demo configuration for real or sensitive data.
+## Docker TEST
+
+Docker Compose explicitly sets `ASPNETCORE_ENVIRONMENT=Test`. The safe,
+non-secret settings in `appsettings.Test.json` require
+`BedtimeStoryTracker_Test`, enable startup migrations, and seed missing
+fictional catalog data. The real container-compatible connection string is
+supplied through the ignored `.env.server` file:
+
+```text
+ConnectionStrings__ApplicationDatabase=Server=...;Database=BedtimeStoryTracker_Test;...
+```
+
+`Test` also enables Scalar/OpenAPI for packaged validation. Docker never selects
+Development, Demo, or Production and cannot fall back to a tracked connection
+string because no TEST connection string is stored in appsettings.
+
+## Secrets and configuration hierarchy
+
+ASP.NET Core loads shared `appsettings.json`, then the selected
+environment-specific file, then environment variables. Local Windows-authenticated
+DEV and DEMO connections are tracked because they contain no credentials.
+Docker credentials belong only in ignored `.env.server`. `.env.server.example`
+contains placeholders and the required TEST database name.
+
+Do not commit passwords, tokens, real remote connection strings, or
+`.env.server`.
 
 ## Production
 
-Production has no tracked connection string. Supply secrets through the hosting
-platform's secret store or environment variables:
-
-```text
-ASPNETCORE_ENVIRONMENT=Production
-ConnectionStrings__ApplicationDatabase=<production SQL Server connection>
-FrontendOrigin=https://<production-frontend>
-```
-
-The production connection must target `BedtimeStoryTracker_Prod`. Use a
-dedicated application login with only the permissions required at runtime. Use a
-separate, short-lived deployment identity to apply reviewed migrations before
-starting the new application version; the runtime process does not migrate or
-seed Production. Require encrypted SQL connections with a trusted certificate,
-restrict network access, protect backups, test restores, and monitor failed
-connections and migration activity.
-
-Generate a reviewable migration script from the repository:
-
-```powershell
-dotnet ef migrations script --idempotent `
-  --project src\BedtimeStoryTracker.Api\BedtimeStoryTracker.Api.csproj `
-  --startup-project src\BedtimeStoryTracker.Api\BedtimeStoryTracker.Api.csproj `
-  --output artifacts\BedtimeStoryTracker_Prod.sql
-```
-
-Review and execute that artifact through the approved production deployment
-process using the migration identity. Never run `Reset-Database.ps1` against
-Production; the script accepts only Development or Demo.
-
-## Configuration rules
-
-- Never commit database passwords, tokens, or production connection strings.
-- Use different SQL logins for Development, Demo, Production runtime, and
-  Production migrations.
-- Keep database names explicit and environment-specific.
-- Back up Production before schema changes and verify restore procedures.
-- Promote the same reviewed migrations between environments; do not maintain
-  environment-specific schemas.
-- Treat automatic migration and fictional seeding as Development/Demo
-  conveniences only.
+Production is deferred to a future Azure-hosted environment. This checkpoint
+does not provide a Production appsettings file, Docker environment, database,
+credentials, deployment script, or Azure resources.

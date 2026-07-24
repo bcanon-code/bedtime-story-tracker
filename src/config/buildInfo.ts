@@ -1,4 +1,4 @@
-type PublicEnvironment = 'Local Development' | 'Docker' | 'Server' | string;
+type PublicEnvironment = 'DEV' | 'DEMO' | 'TEST' | string;
 
 function positiveInteger(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
@@ -26,8 +26,8 @@ const gitSha = process.env.EXPO_PUBLIC_GIT_SHA ?? 'unknown';
 const dirty = process.env.EXPO_PUBLIC_GIT_DIRTY === 'true';
 const builtAtUtc = process.env.EXPO_PUBLIC_BUILD_TIME_UTC;
 const environment: PublicEnvironment =
-  process.env.EXPO_PUBLIC_BUILD_ENVIRONMENT ?? 'Local Development';
-const isDevelopment = environment === 'Local Development';
+  process.env.EXPO_PUBLIC_BUILD_ENVIRONMENT ?? 'DEV';
+const isDevelopment = environment === 'DEV';
 const shaDisplay = `${gitSha}${dirty ? '-dirty' : ''}`;
 const timeDisplay = displayTimestamp(builtAtUtc);
 
@@ -42,6 +42,6 @@ export const buildInfo = Object.freeze({
     ? `v${version}-dev · ${shaDisplay}`
     : `v${version} · Build ${displayBuild(build)}`,
   detailedDisplay: isDevelopment
-    ? `v${version}-dev | Local Development | ${shaDisplay}`
+    ? `v${version}-dev | DEV | ${shaDisplay}`
     : `v${version} | ${timeDisplay ?? 'build time unavailable'} | Build ${displayBuild(build)} | Commit ${shaDisplay} | ${environment}`,
 });
