@@ -72,6 +72,7 @@ export default function App() {
   const saveInFlightRef = useRef(false);
   const [appDestination, setAppDestination] =
     useState<AppDestination>('tracker');
+  const [hasOpenedAdmin, setHasOpenedAdmin] = useState(false);
   const [completedSessions, setCompletedSessions] = useState<ReadingSessionHistoryDto[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -309,22 +310,37 @@ export default function App() {
     setStoryLoadAttempt((current) => current + 1);
   };
 
+  const navigate = (destination: AppDestination) => {
+    if (destination === 'admin') {
+      setHasOpenedAdmin(true);
+    }
+    setAppDestination(destination);
+  };
+
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.screen}>
         <AppNavigationShell
           activeDestination={appDestination}
-          onNavigate={setAppDestination}
+          onNavigate={navigate}
         >
-        {appDestination === 'history' ? (
+        {hasOpenedAdmin ? (
+          <View
+            style={[
+              styles.destinationScreen,
+              appDestination !== 'admin' && styles.hiddenDestination,
+            ]}
+          >
+            <AdminDashboard />
+          </View>
+        ) : null}
+        {appDestination === 'admin' ? null : appDestination === 'history' ? (
           <CompletedSessionList
             error={historyError}
             isLoading={isHistoryLoading}
             onRetry={() => setHistoryLoadAttempt((current) => current + 1)}
             sessions={completedSessions}
           />
-        ) : appDestination === 'admin' ? (
-          <AdminDashboard />
         ) : appDestination === 'settings' ? (
           <SettingsScreen />
         ) : isInitialLoading ? (
@@ -655,6 +671,12 @@ const styles = StyleSheet.create({
   screen: {
     backgroundColor: theme.colors.background,
     flex: 1,
+  },
+  destinationScreen: {
+    flex: 1,
+  },
+  hiddenDestination: {
+    display: 'none',
   },
   centeredState: {
     alignItems: 'center',
