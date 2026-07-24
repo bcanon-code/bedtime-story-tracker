@@ -13,10 +13,6 @@ import { getChildren, getStories } from '../api/bedtimeApi';
 import type { ChildDto, StorySummaryDto } from '../api/apiTypes';
 import { theme } from '../theme';
 
-export interface AdminDashboardProps {
-  onReturn: () => void;
-}
-
 interface CatalogState<T> {
   data: T[];
   error: string | null;
@@ -36,7 +32,7 @@ function getErrorMessage(error: unknown) {
     : 'An unexpected error occurred.';
 }
 
-export function AdminDashboard({ onReturn }: AdminDashboardProps) {
+export function AdminDashboard() {
   const { width } = useWindowDimensions();
   const [childrenState, setChildrenState] =
     useState<CatalogState<ChildDto>>(initialCatalogState);
@@ -105,21 +101,6 @@ export function AdminDashboard({ onReturn }: AdminDashboardProps) {
     return () => controller.abort();
   }, [storiesAttempt]);
 
-  const returnButton = (
-    <Pressable
-      accessibilityHint="Returns to the current bedtime-reading workflow without clearing it"
-      accessibilityLabel="Return to bedtime workflow"
-      accessibilityRole="button"
-      onPress={onReturn}
-      style={({ pressed }) => [
-        styles.returnButton,
-        pressed && styles.pressedButton,
-      ]}
-    >
-      <Text style={styles.returnButtonText}>Return to bedtime workflow</Text>
-    </Pressable>
-  );
-
   if (width < desktopBreakpoint) {
     return (
       <View style={styles.desktopRequired}>
@@ -130,7 +111,6 @@ export function AdminDashboard({ onReturn }: AdminDashboardProps) {
           This review workspace is designed for desktop-sized windows. Widen
           the window or return to the bedtime workflow.
         </Text>
-        {returnButton}
       </View>
     );
   }
@@ -155,7 +135,6 @@ export function AdminDashboard({ onReturn }: AdminDashboardProps) {
             authorization boundary.
           </Text>
         </View>
-        {returnButton}
       </View>
 
       <View style={styles.catalogGrid}>
@@ -393,24 +372,6 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: theme.colors.background,
     fontWeight: '700',
-  },
-  returnButton: {
-    alignItems: 'center',
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    borderWidth: 2,
-    justifyContent: 'center',
-    minHeight: 48,
-    paddingHorizontal: theme.spacing.lg,
-  },
-  returnButtonText: {
-    color: theme.colors.textPrimary,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  pressedButton: {
-    backgroundColor: theme.colors.surfacePressed,
-    borderColor: theme.colors.primary,
   },
   pressedPrimaryButton: {
     backgroundColor: theme.colors.primaryPressed,

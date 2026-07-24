@@ -60,3 +60,21 @@ export interface ReadingSessionHistoryDto {
   buildEnvironment: string | null;
   childObservations: ReadingSessionChildObservationDto[];
 }
+
+export interface VersionResponse {
+  version: string;
+  build: number;
+  gitSha: string;
+  gitDirty: boolean;
+  builtAtUtc: string | null;
+  environment: string;
+  displayVersion: string;
+}
+
+export interface HealthResponse {
+  status: 'ok' | 'degraded';
+  database: {
+    status: 'connected' | 'unavailable' | 'notConfigured';
+    provider: string | null;
+  };
+}

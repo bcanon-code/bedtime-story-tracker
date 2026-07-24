@@ -4,10 +4,12 @@ import type {
   ChildDto,
   CreateReadingSessionRequest,
   CreateReadingSessionResponse,
+  HealthResponse,
   ReadingSessionChildObservationDto,
   ReadingSessionHistoryDto,
   StoryDetailDto,
   StorySummaryDto,
+  VersionResponse,
 } from './apiTypes';
 
 const defaultApiBaseUrl =
@@ -50,6 +52,9 @@ const isNullableString = (value: unknown) =>
 
 const isNullableNumber = (value: unknown) =>
   value === null || typeof value === 'number';
+
+const isBoolean = (value: Record<string, unknown>, key: string) =>
+  typeof value[key] === 'boolean';
 
 const isReadingSessionChildObservationDto = (
   value: unknown,
@@ -223,5 +228,40 @@ export async function getReadingSessions(
     throw new Error('The bedtime API returned an invalid session history response.');
   }
 
+  return data;
+}
+
+const isVersionResponse = (value: unknown): value is VersionResponse =>
+  isRecord(value) &&
+  hasString(value, 'version') &&
+  hasNumber(value, 'build') &&
+  hasString(value, 'gitSha') &&
+  isBoolean(value, 'gitDirty') &&
+  isNullableString(value.builtAtUtc) &&
+  hasString(value, 'environment') &&
+  hasString(value, 'displayVersion');
+
+const isHealthResponse = (value: unknown): value is HealthResponse =>
+  isRecord(value) &&
+  (value.status === 'ok' || value.status === 'degraded') &&
+  isRecord(value.database) &&
+  (value.database.status === 'connected' ||
+    value.database.status === 'unavailable' ||
+    value.database.status === 'notConfigured') &&
+  isNullableString(value.database.provider);
+
+export async function getVersion(signal?: AbortSignal): Promise<VersionResponse> {
+  const data = await requestJson('/version', signal);
+  if (!isVersionResponse(data)) {
+    throw new Error('The bedtime API returned invalid version information.');
+  }
+  return data;
+}
+
+export async function getHealth(signal?: AbortSignal): Promise<HealthResponse> {
+  const data = await requestJson('/health', signal);
+  if (!isHealthResponse(data)) {
+    throw new Error('The bedtime API returned invalid health information.');
+  }
   return data;
 }

@@ -20,7 +20,6 @@ export interface CompletedSessionListProps {
   isLoading: boolean;
   error: string | null;
   onRetry: () => void;
-  onReturn: () => void;
 }
 
 const wideLayoutBreakpoint = 760;
@@ -51,25 +50,9 @@ export function CompletedSessionList({
   isLoading,
   error,
   onRetry,
-  onReturn,
 }: CompletedSessionListProps) {
   const { width } = useWindowDimensions();
   const isWide = width >= wideLayoutBreakpoint;
-
-  const returnButton = (
-    <Pressable
-      accessibilityHint="Returns to the current bedtime-reading workflow"
-      accessibilityLabel="Return to current bedtime workflow"
-      accessibilityRole="button"
-      onPress={onReturn}
-      style={({ pressed }) => [
-        styles.returnButton,
-        pressed && styles.pressedButton,
-      ]}
-    >
-      <Text style={styles.returnButtonText}>Return to bedtime workflow</Text>
-    </Pressable>
-  );
 
   if (isLoading) {
     return (
@@ -78,7 +61,6 @@ export function CompletedSessionList({
           Completed sessions
         </Text>
         <Text style={styles.stateMessage}>Loading completed sessions…</Text>
-        {returnButton}
       </View>
     );
   }
@@ -105,7 +87,6 @@ export function CompletedSessionList({
         >
           <Text style={styles.primaryButtonText}>Retry</Text>
         </Pressable>
-        {returnButton}
       </View>
     );
   }
@@ -123,7 +104,6 @@ export function CompletedSessionList({
           <Text style={styles.introduction}>
             The 50 most recent saved reading sessions, newest first.
           </Text>
-          {returnButton}
         </View>
       }
       ListEmptyComponent={
@@ -395,28 +375,8 @@ const styles = StyleSheet.create({
     minWidth: 120,
     paddingHorizontal: theme.spacing.lg,
   },
-  returnButton: {
-    alignItems: 'center',
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    borderWidth: 2,
-    justifyContent: 'center',
-    marginTop: theme.spacing.lg,
-    minHeight: 48,
-    paddingHorizontal: theme.spacing.lg,
-  },
-  pressedButton: {
-    backgroundColor: theme.colors.surfacePressed,
-    borderColor: theme.colors.primary,
-  },
   pressedPrimaryButton: {
     backgroundColor: theme.colors.primaryPressed,
-  },
-  returnButtonText: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
-    textAlign: 'center',
   },
   primaryButtonText: {
     color: theme.colors.background,

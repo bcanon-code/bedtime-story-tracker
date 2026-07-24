@@ -5,7 +5,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native';
 import {
@@ -21,6 +20,11 @@ import { SessionSummaryCard } from './src/components/SessionSummaryCard';
 import { CompletedSessionList } from './src/components/CompletedSessionList';
 import { AdminDashboard } from './src/components/AdminDashboard';
 import {
+  AppDestination,
+  AppNavigationShell,
+} from './src/components/AppNavigationShell';
+import { SettingsScreen } from './src/components/SettingsScreen';
+import {
   createReadingSession,
   getChildren,
   getReadingSessions,
@@ -30,7 +34,6 @@ import {
 import type { ReadingSessionHistoryDto } from './src/api/apiTypes';
 import type { Story, StorySummary } from './src/data/storyCatalog';
 import { formatElapsedTime } from './src/formatters';
-import { buildInfo } from './src/config/buildInfo';
 import { theme } from './src/theme';
 
 interface Child {
@@ -41,12 +44,7 @@ interface Child {
 type CalmnessByChild = Partial<Record<Child['id'], CalmnessValue>>;
 type WorkflowStep = 'setup' | 'reading' | 'finished' | 'summary';
 type SaveStatus = 'not-saved' | 'saving' | 'saved' | 'failed';
-type AppView = 'workflow' | 'history' | 'admin';
-
-const desktopBreakpoint = 760;
-
 export default function App() {
-  const { width } = useWindowDimensions();
   const [children, setChildren] = useState<Child[]>([]);
   const [stories, setStories] = useState<StorySummary[]>([]);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -72,7 +70,8 @@ export default function App() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('not-saved');
   const [saveError, setSaveError] = useState<string | null>(null);
   const saveInFlightRef = useRef(false);
-  const [appView, setAppView] = useState<AppView>('workflow');
+  const [appDestination, setAppDestination] =
+    useState<AppDestination>('tracker');
   const [completedSessions, setCompletedSessions] = useState<ReadingSessionHistoryDto[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
@@ -184,7 +183,7 @@ export default function App() {
   }, [isReading]);
 
   useEffect(() => {
-    if (appView !== 'history') {
+    if (appDestination !== 'history') {
       return;
     }
 
@@ -211,7 +210,7 @@ export default function App() {
 
     void loadHistory();
     return () => controller.abort();
-  }, [appView, historyLoadAttempt]);
+  }, [appDestination, historyLoadAttempt]);
 
   const selectStory = (storyId: Story['id']) => {
     setSelectedStoryId(storyId);
@@ -313,16 +312,21 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <SafeAreaView style={styles.screen}>
-        {appView === 'history' ? (
+        <AppNavigationShell
+          activeDestination={appDestination}
+          onNavigate={setAppDestination}
+        >
+        {appDestination === 'history' ? (
           <CompletedSessionList
             error={historyError}
             isLoading={isHistoryLoading}
             onRetry={() => setHistoryLoadAttempt((current) => current + 1)}
-            onReturn={() => setAppView('workflow')}
             sessions={completedSessions}
           />
-        ) : appView === 'admin' ? (
-          <AdminDashboard onReturn={() => setAppView('workflow')} />
+        ) : appDestination === 'admin' ? (
+          <AdminDashboard />
+        ) : appDestination === 'settings' ? (
+          <SettingsScreen />
         ) : isInitialLoading ? (
           <View accessibilityLiveRegion="polite" style={styles.centeredState}>
             <Text style={styles.stateTitle}>Loading bedtime data…</Text>
@@ -494,33 +498,6 @@ export default function App() {
               <Text style={styles.introduction}>
                 A quiet check-in before tonight&apos;s story.
               </Text>
-              <Pressable
-                accessibilityHint="Shows previously saved completed sessions"
-                accessibilityLabel="Open completed sessions"
-                accessibilityRole="button"
-                onPress={() => setAppView('history')}
-                style={({ pressed }) => [
-                  styles.historyButton,
-                  pressed && styles.pressedSecondaryButton,
-                ]}
-              >
-                <Text style={styles.historyButtonText}>Completed sessions</Text>
-              </Pressable>
-              {width >= desktopBreakpoint ? (
-                <Pressable
-                  accessibilityHint="Opens the desktop reference-data review workspace"
-                  accessibilityLabel="Open administration"
-                  accessibilityRole="button"
-                  onPress={() => setAppView('admin')}
-                  style={({ pressed }) => [
-                    styles.adminButton,
-                    pressed && styles.pressedSecondaryButton,
-                  ]}
-                >
-                  <Text style={styles.historyButtonText}>Administration</Text>
-                </Pressable>
-              ) : null}
-
             <View style={styles.checkIn}>
               <Text style={styles.stepLabel}>Step 1 of 2</Text>
               <Text style={styles.heading}>Before reading</Text>
@@ -665,15 +642,10 @@ export default function App() {
                 </Text>
               </View>
             )}
-            <Text
-              accessibilityLabel={buildInfo.detailedDisplay}
-              style={styles.versionText}
-            >
-              {buildInfo.compactDisplay}
-            </Text>
             </View>
           </ScrollView>
         )}
+        </AppNavigationShell>
       </SafeAreaView>
     </SafeAreaProvider>
   );
@@ -1042,41 +1014,8 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     textAlignVertical: 'top',
   },
-  versionText: {
-    color: theme.colors.textSecondary,
-    fontSize: 12,
-    marginTop: theme.spacing.xl,
-    textAlign: 'center',
-  },
-  historyButton: {
-    alignItems: 'center',
-    alignSelf: 'center',
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    borderWidth: 2,
-    justifyContent: 'center',
-    marginTop: theme.spacing.lg,
-    minHeight: 48,
-    paddingHorizontal: theme.spacing.lg,
-  },
-  adminButton: {
-    alignItems: 'center',
-    alignSelf: 'center',
-    borderColor: theme.colors.border,
-    borderRadius: theme.radius.md,
-    borderWidth: 2,
-    justifyContent: 'center',
-    marginTop: theme.spacing.sm,
-    minHeight: 48,
-    paddingHorizontal: theme.spacing.lg,
-  },
   pressedSecondaryButton: {
     backgroundColor: theme.colors.surfacePressed,
     borderColor: theme.colors.primary,
-  },
-  historyButtonText: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '700',
   },
 });
